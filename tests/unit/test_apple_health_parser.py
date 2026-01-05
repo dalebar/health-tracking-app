@@ -57,4 +57,4 @@ class TestAppleHealthParser:
         assert results[0]["metric_type"] == "steps"
         assert results[0]["value"] == Decimal("1400")  # 648 + 752
         assert results[0]["unit"] == "count"
-        assert results[0]["date"].date() == datetime(2025, 6, 26).date()
+        assert results[0]["date"] == datetime(2025, 6, 26).date()

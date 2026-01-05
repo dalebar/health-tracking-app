@@ -6,15 +6,36 @@ from collections import defaultdict
 from datetime import datetime, date
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, Any
+from typing import TypedDict
 
 from defusedxml import ElementTree as ET
+
+
+class MetricResult(TypedDict):
+    """Type definition for metric results."""
+
+    metric_type: str
+    value: Decimal
+    unit: str
+    date: date
+    recorded_at: datetime
+    source: str
+
+
+class WeightRecord(TypedDict):
+    """Type definition for weight records (timestamp-based, not aggregated by date)."""
+
+    metric_type: str
+    value: Decimal
+    unit: str
+    recorded_at: datetime
+    source: str
 
 
 class AppleHealthParser:
     """Parser for Apple Health export XML files."""
 
-    def parse_weight_record(self, xml_string: str) -> Dict[str, Any]:
+    def parse_weight_record(self, xml_string: str) -> WeightRecord:
         """
         Parse a single weight record from XML string.
 
@@ -57,7 +78,7 @@ class AppleHealthParser:
             "source": source or "unknown",  # source is optional
         }
 
-    def parse_weight_from_file(self, file_path: str | Path) -> list[Dict[str, Any]]:
+    def parse_weight_from_file(self, file_path: str | Path) -> list[WeightRecord]:
         """
         Parse all weight records from Apple Health export XML file.
 
@@ -68,7 +89,7 @@ class AppleHealthParser:
             List of weight records sorted by date (oldest first)
         """
         # Parse XML file in chunks to handle large files efficiently
-        results = []
+        results: list[WeightRecord] = []
 
         # Use iterparse to avoid loading entire 1.7GB file into memory
         context = ET.iterparse(file_path, events=("end",))
@@ -113,7 +134,7 @@ class AppleHealthParser:
 
         return results
 
-    def parse_step_records(self, xml_string: str) -> list[Dict[str, Any]]:
+    def parse_step_records(self, xml_string: str) -> list[MetricResult]:
         """
         Parse and aggregate step records by date.
 
@@ -142,16 +163,182 @@ class AppleHealthParser:
             daily_steps[record_date] += value
 
         # Convert to list of results
-        results = []
+        results: list[MetricResult] = []
         for record_date, total_steps in daily_steps.items():
             results.append(
                 {
                     "metric_type": "steps",
                     "value": total_steps,
                     "unit": "count",
-                    "date": datetime.combine(record_date, datetime.min.time()),
+                    "date": record_date,
+                    "recorded_at": datetime.combine(record_date, datetime.min.time()),
                     "source": "apple_health",
                 }
             )
 
+        return results
+
+    def parse_steps_from_file(self, file_path: str | Path) -> list[MetricResult]:
+        """
+        Parse all step records from Apple Health export and aggregate by date.
+
+        Args:
+            file_path: Path to export.xml file
+
+        Returns:
+            List of daily step totals sorted by date (oldest first)
+        """
+        # Aggregate steps by date
+        daily_steps: defaultdict[date, Decimal] = defaultdict(Decimal)
+
+        # Use iterparse for memory efficiency
+        context = ET.iterparse(file_path, events=("end",))
+
+        for event, elem in context:
+            if (
+                elem.tag == "Record"
+                and elem.get("type") == "HKQuantityTypeIdentifierStepCount"
+            ):
+                try:
+                    value_str = elem.get("value")
+                    date_str = elem.get("startDate")
+
+                    if not value_str or not date_str:
+                        continue
+
+                    value = Decimal(value_str)
+                    recorded_at = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S %z")
+                    record_date = recorded_at.date()
+
+                    # Aggregate by date
+                    daily_steps[record_date] += value
+
+                except (ValueError, TypeError):
+                    continue
+                finally:
+                    elem.clear()
+
+        # Convert to list and sort
+        results: list[MetricResult] = []
+        for record_date, total_steps in daily_steps.items():
+            results.append(
+                {
+                    "metric_type": "steps",
+                    "value": total_steps,
+                    "unit": "count",
+                    "date": record_date,
+                    "recorded_at": datetime.combine(record_date, datetime.min.time()),
+                    "source": "apple_health",
+                }
+            )
+
+        results.sort(key=lambda x: x["date"])
+        return results
+
+    def parse_active_energy_from_file(
+        self, file_path: str | Path
+    ) -> list[MetricResult]:
+        """
+        Parse active energy records and aggregate by date.
+
+        Args:
+            file_path: Path to export.xml file
+
+        Returns:
+            List of daily active energy totals (kcal)
+        """
+        daily_energy: defaultdict[date, Decimal] = defaultdict(Decimal)
+        context = ET.iterparse(file_path, events=("end",))
+
+        for event, elem in context:
+            if (
+                elem.tag == "Record"
+                and elem.get("type") == "HKQuantityTypeIdentifierActiveEnergyBurned"
+            ):
+                try:
+                    value_str = elem.get("value")
+                    date_str = elem.get("startDate")
+
+                    if not value_str or not date_str:
+                        continue
+
+                    value = Decimal(value_str)
+                    recorded_at = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S %z")
+                    record_date = recorded_at.date()
+
+                    daily_energy[record_date] += value
+
+                except (ValueError, TypeError):
+                    continue
+                finally:
+                    elem.clear()
+
+        results: list[MetricResult] = []
+        for record_date, total_energy in daily_energy.items():
+            results.append(
+                {
+                    "metric_type": "active_energy",
+                    "value": total_energy,
+                    "unit": "kcal",
+                    "date": record_date,
+                    "recorded_at": datetime.combine(record_date, datetime.min.time()),
+                    "source": "apple_health",
+                }
+            )
+
+        results.sort(key=lambda x: x["date"])
+        return results
+
+    def parse_exercise_minutes_from_file(
+        self, file_path: str | Path
+    ) -> list[MetricResult]:
+        """
+        Parse exercise time records and aggregate by date.
+
+        Args:
+            file_path: Path to export.xml file
+
+        Returns:
+            List of daily exercise minutes totals
+        """
+        daily_exercise: defaultdict[date, Decimal] = defaultdict(Decimal)
+        context = ET.iterparse(file_path, events=("end",))
+
+        for event, elem in context:
+            if (
+                elem.tag == "Record"
+                and elem.get("type") == "HKQuantityTypeIdentifierAppleExerciseTime"
+            ):
+                try:
+                    value_str = elem.get("value")
+                    date_str = elem.get("startDate")
+
+                    if not value_str or not date_str:
+                        continue
+
+                    value = Decimal(value_str)
+                    recorded_at = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S %z")
+                    record_date = recorded_at.date()
+
+                    daily_exercise[record_date] += value
+
+                except (ValueError, TypeError):
+                    continue
+                finally:
+                    elem.clear()
+
+        results: list[MetricResult] = []
+        for record_date, total_minutes in daily_exercise.items():
+            results.append(
+                {
+                    "metric_type": "exercise_minutes",
+                    "value": total_minutes,
+                    "unit": "min",
+                    "date": record_date,
+                    "recorded_at": datetime.combine(record_date, datetime.min.time()),
+                    "source": "apple_health",
+                }
+            )
+
+        results.sort(key=lambda x: x["date"])
         return results
