@@ -150,10 +150,16 @@ class AppleHealthParser:
         daily_steps: defaultdict[date, Decimal] = defaultdict(Decimal)
 
         for record in root.findall("Record"):
+            # Only process step count records
+            if record.get("type") != "HKQuantityTypeIdentifierStepCount":
+                continue
+
             value_str = record.get("value")
+            unit = record.get("unit")
             date_str = record.get("startDate")
 
-            if not value_str or not date_str:
+            # Skip records missing required fields
+            if not value_str or not unit or not date_str:
                 continue
 
             value = Decimal(value_str)

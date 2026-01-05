@@ -95,7 +95,7 @@ class BodyMetric(Base):
 
     # Metric identification
     metric_type = Column(String(50), nullable=False)  # 'weight', 'body_fat', 'bmi'
-    value = Column(DECIMAL(10, 2), nullable=False)  # The measurement value
+    value = Column(DECIMAL(10, 3), nullable=False)  # The measurement value
     unit = Column(String(20), nullable=False)  # 'kg', '%', etc.
 
     # Temporal information
@@ -145,7 +145,7 @@ class ActivityMetric(Base):
     metric_type = Column(
         String(50), nullable=False
     )  # 'steps', 'active_energy', 'exercise_minutes'
-    value = Column(DECIMAL(10, 2), nullable=False)
+    value = Column(DECIMAL(10, 3), nullable=False)
     unit = Column(String(20), nullable=False)  # 'count', 'kcal', 'minutes'
 
     # Temporal information
@@ -189,7 +189,7 @@ class HeartRateMetric(Base):
     metric_type = Column(
         String(50), nullable=False
     )  # 'resting_hr', 'walking_hr', 'hrv'
-    value = Column(DECIMAL(10, 2), nullable=False)
+    value = Column(DECIMAL(10, 3), nullable=False)
     unit = Column(String(20), nullable=False)  # 'bpm', 'ms'
 
     # Temporal information
