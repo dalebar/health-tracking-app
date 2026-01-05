@@ -348,3 +348,180 @@ class AppleHealthParser:
 
         results.sort(key=lambda x: x["date"])
         return results
+
+    def parse_resting_heart_rate_from_file(
+        self, file_path: str | Path
+    ) -> list[MetricResult]:
+        """
+        Parse resting heart rate records and aggregate by date.
+
+        Multiple readings per day are averaged.
+
+        Args:
+            file_path: Path to export.xml file
+
+        Returns:
+            List of daily resting heart rate averages
+        """
+        # Aggregate resting HR by date (can have multiple readings per day)
+        daily_hr: defaultdict[date, list[Decimal]] = defaultdict(list)
+        context = ET.iterparse(file_path, events=("end",))
+
+        for event, elem in context:
+            if (
+                elem.tag == "Record"
+                and elem.get("type") == "HKQuantityTypeIdentifierRestingHeartRate"
+            ):
+                try:
+                    value_str = elem.get("value")
+                    date_str = elem.get("startDate")
+
+                    if not value_str or not date_str:
+                        continue
+
+                    value = Decimal(value_str)
+                    recorded_at = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S %z")
+                    record_date = recorded_at.date()
+
+                    daily_hr[record_date].append(value)
+
+                except (ValueError, TypeError):
+                    continue
+                finally:
+                    elem.clear()
+
+        # Calculate daily averages
+        results: list[MetricResult] = []
+        for record_date, values in daily_hr.items():
+            avg_hr = Decimal(sum(values) / len(values))
+            results.append(
+                {
+                    "metric_type": "resting_hr",
+                    "value": avg_hr,
+                    "unit": "bpm",
+                    "date": record_date,
+                    "recorded_at": datetime.combine(record_date, datetime.min.time()),
+                    "source": "apple_health",
+                }
+            )
+
+        results.sort(key=lambda x: x["date"])
+        return results
+
+    def parse_walking_heart_rate_from_file(
+        self, file_path: str | Path
+    ) -> list[MetricResult]:
+        """
+        Parse walking heart rate records and aggregate by date.
+
+        Multiple readings per day are averaged.
+
+        Args:
+            file_path: Path to export.xml file
+
+        Returns:
+            List of daily walking heart rate averages
+        """
+        # Aggregate walking HR by date (can have multiple readings per day)
+        daily_hr: defaultdict[date, list[Decimal]] = defaultdict(list)
+        context = ET.iterparse(file_path, events=("end",))
+
+        for event, elem in context:
+            if (
+                elem.tag == "Record"
+                and elem.get("type")
+                == "HKQuantityTypeIdentifierWalkingHeartRateAverage"
+            ):
+                try:
+                    value_str = elem.get("value")
+                    date_str = elem.get("startDate")
+
+                    if not value_str or not date_str:
+                        continue
+
+                    value = Decimal(value_str)
+                    recorded_at = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S %z")
+                    record_date = recorded_at.date()
+
+                    daily_hr[record_date].append(value)
+
+                except (ValueError, TypeError):
+                    continue
+                finally:
+                    elem.clear()
+
+        # Calculate daily averages
+        results: list[MetricResult] = []
+        for record_date, values in daily_hr.items():
+            avg_hr = Decimal(sum(values) / len(values))
+            results.append(
+                {
+                    "metric_type": "walking_hr",
+                    "value": avg_hr,
+                    "unit": "bpm",
+                    "date": record_date,
+                    "recorded_at": datetime.combine(record_date, datetime.min.time()),
+                    "source": "apple_health",
+                }
+            )
+
+        results.sort(key=lambda x: x["date"])
+        return results
+
+    def parse_hrv_from_file(self, file_path: str | Path) -> list[MetricResult]:
+        """
+        Parse Heart Rate Variability (HRV) records and aggregate by date.
+
+        HRV can have multiple readings per day, so we take the average.
+
+        Args:
+            file_path: Path to export.xml file
+
+        Returns:
+            List of daily HRV averages (in milliseconds)
+        """
+        # Aggregate HRV by date (multiple readings per day)
+        daily_hrv: defaultdict[date, list[Decimal]] = defaultdict(list)
+        context = ET.iterparse(file_path, events=("end",))
+
+        for event, elem in context:
+            if (
+                elem.tag == "Record"
+                and elem.get("type")
+                == "HKQuantityTypeIdentifierHeartRateVariabilitySDNN"
+            ):
+                try:
+                    value_str = elem.get("value")
+                    date_str = elem.get("startDate")
+
+                    if not value_str or not date_str:
+                        continue
+
+                    value = Decimal(value_str)
+                    recorded_at = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S %z")
+                    record_date = recorded_at.date()
+
+                    daily_hrv[record_date].append(value)
+
+                except (ValueError, TypeError):
+                    continue
+                finally:
+                    elem.clear()
+
+        # Calculate daily averages
+        results: list[MetricResult] = []
+        for record_date, values in daily_hrv.items():
+            avg_hrv = Decimal(sum(values) / len(values))
+            results.append(
+                {
+                    "metric_type": "hrv",
+                    "value": avg_hrv,
+                    "unit": "ms",
+                    "date": record_date,
+                    "recorded_at": datetime.combine(record_date, datetime.min.time()),
+                    "source": "apple_health",
+                }
+            )
+
+        results.sort(key=lambda x: x["date"])
+        return results
