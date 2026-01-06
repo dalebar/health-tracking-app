@@ -53,6 +53,24 @@ class SleepSessionRecord(TypedDict):
     source: str
 
 
+class WorkoutRecord(TypedDict, total=False):
+    """Type definition for workout records."""
+
+    workout_type: str
+    start_time: datetime
+    end_time: datetime
+    duration_minutes: Decimal
+    active_energy_kcal: Decimal
+    basal_energy_kcal: Decimal
+    total_energy_kcal: Decimal
+    distance_km: Decimal
+    avg_heart_rate_bpm: int
+    min_heart_rate_bpm: int
+    max_heart_rate_bpm: int
+    source: str
+    indoor_workout: bool
+
+
 class AppleHealthParser:
     """Parser for Apple Health export XML files."""
 
@@ -753,3 +771,131 @@ class AppleHealthParser:
             "awake_minutes": stage_minutes["awake"],
             "source": "apple_health",
         }
+
+    def parse_workouts_from_file(self, file_path: str | Path) -> list[WorkoutRecord]:
+        """
+        Parse workout sessions from Apple Health export.
+
+        Extracts workout metadata including type, duration, energy expenditure,
+        distance, and heart rate aggregates from WorkoutStatistics.
+
+        Args:
+            file_path: Path to export.xml file
+
+        Returns:
+            List of workout records sorted by start time (oldest first)
+        """
+        results: list[WorkoutRecord] = []
+        context = ET.iterparse(file_path, events=("end",))
+
+        for event, elem in context:
+            if elem.tag == "Workout":
+                try:
+                    # Extract workout attributes
+                    workout_type_raw = elem.get("workoutActivityType")
+                    start_str = elem.get("startDate")
+                    end_str = elem.get("endDate")
+                    duration_str = elem.get("duration")
+                    source = elem.get("sourceName")
+
+                    if (
+                        not workout_type_raw
+                        or not start_str
+                        or not end_str
+                        or not duration_str
+                    ):
+                        continue
+
+                    # Clean workout type (remove HKWorkoutActivityType prefix)
+                    workout_type = workout_type_raw.replace("HKWorkoutActivityType", "")
+
+                    # Parse dates
+                    start_time = datetime.strptime(
+                        start_str, "%Y-%m-%d %H:%M:%S %z"
+                    ).replace(tzinfo=None)
+                    end_time = datetime.strptime(
+                        end_str, "%Y-%m-%d %H:%M:%S %z"
+                    ).replace(tzinfo=None)
+
+                    # Duration is in minutes (as decimal)
+                    duration_minutes = Decimal(duration_str)
+
+                    # Initialize workout record with required fields
+                    workout: WorkoutRecord = {
+                        "workout_type": workout_type,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "duration_minutes": duration_minutes,
+                        "source": source or "apple_health",
+                        "indoor_workout": False,
+                    }
+
+                    # Parse WorkoutStatistics for energy, distance, heart rate
+                    active_energy = None
+                    basal_energy = None
+                    distance = None
+                    avg_hr = None
+                    min_hr = None
+                    max_hr = None
+
+                    for stat in elem.findall("WorkoutStatistics"):
+                        stat_type = stat.get("type", "")
+
+                        # Energy
+                        if stat_type == "HKQuantityTypeIdentifierActiveEnergyBurned":
+                            active_energy = Decimal(stat.get("sum", "0"))
+                        elif stat_type == "HKQuantityTypeIdentifierBasalEnergyBurned":
+                            basal_energy = Decimal(stat.get("sum", "0"))
+
+                        # Distance (multiple types)
+                        elif stat_type in [
+                            "HKQuantityTypeIdentifierDistanceWalkingRunning",
+                            "HKQuantityTypeIdentifierDistanceCycling",
+                            "HKQuantityTypeIdentifierDistanceSwimming",
+                        ]:
+                            distance = Decimal(stat.get("sum", "0"))
+
+                        # Heart Rate
+                        elif stat_type == "HKQuantityTypeIdentifierHeartRate":
+                            avg_val = stat.get("average")
+                            min_val = stat.get("minimum")
+                            max_val = stat.get("maximum")
+
+                            if avg_val:
+                                avg_hr = int(float(avg_val))
+                            if min_val:
+                                min_hr = int(float(min_val))
+                            if max_val:
+                                max_hr = int(float(max_val))
+
+                    # Check metadata for indoor workout
+                    for meta in elem.findall("MetadataEntry"):
+                        if meta.get("key") == "HKIndoorWorkout":
+                            workout["indoor_workout"] = meta.get("value") == "1"
+
+                    # Add optional fields if present
+                    if active_energy is not None:
+                        workout["active_energy_kcal"] = active_energy
+                    if basal_energy is not None:
+                        workout["basal_energy_kcal"] = basal_energy
+                    if active_energy is not None and basal_energy is not None:
+                        workout["total_energy_kcal"] = active_energy + basal_energy
+                    if distance is not None:
+                        workout["distance_km"] = distance
+                    if avg_hr is not None:
+                        workout["avg_heart_rate_bpm"] = avg_hr
+                    if min_hr is not None:
+                        workout["min_heart_rate_bpm"] = min_hr
+                    if max_hr is not None:
+                        workout["max_heart_rate_bpm"] = max_hr
+
+                    results.append(workout)
+
+                except (ValueError, TypeError):
+                    continue
+                finally:
+                    elem.clear()
+
+        # Sort by start time (oldest first)
+        results.sort(key=lambda x: x["start_time"])
+        return results

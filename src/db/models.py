@@ -17,6 +17,7 @@ from sqlalchemy import (
     CheckConstraint,
     UniqueConstraint,
     Index,
+    Boolean,
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -72,6 +73,9 @@ class User(Base):
     )
     sleep_sessions = relationship(
         "SleepSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    workouts = relationship(
+        "Workout", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -303,3 +307,58 @@ class SleepSession(Base):
 
     def __repr__(self) -> str:
         return f"<SleepSession(start={self.start_time}, duration={self.total_duration_minutes}min)>"
+
+
+class Workout(Base):
+    """
+    Workout sessions from Apple Health.
+
+    Stores aggregated workout data including heart rate metrics, energy expenditure,
+    and distance. Heart rate zones can be calculated on-demand from avg/min/max HR.
+    """
+
+    __tablename__ = "workouts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Workout identification
+    workout_type = Column(String(50), nullable=False)  # 'Boxing', 'Running', etc.
+    start_time = Column(TIMESTAMP, nullable=False)
+    end_time = Column(TIMESTAMP, nullable=False)
+    duration_minutes = Column(DECIMAL(10, 2), nullable=False)
+
+    # Energy metrics (in kcal)
+    active_energy_kcal = Column(DECIMAL(10, 2))  # Workout calories
+    basal_energy_kcal = Column(DECIMAL(10, 2))  # BMR during workout
+    total_energy_kcal = Column(DECIMAL(10, 2))  # Active + Basal (calculated)
+
+    # Distance (nullable - not all workouts have distance)
+    distance_km = Column(DECIMAL(10, 3))
+
+    # Heart rate aggregates (nullable - older workouts may not have HR)
+    avg_heart_rate_bpm = Column(Integer)
+    min_heart_rate_bpm = Column(Integer)
+    max_heart_rate_bpm = Column(Integer)
+
+    # Metadata
+    source = Column(String(100))
+    indoor_workout = Column(Boolean, default=False)
+
+    # Audit timestamp
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+
+    # Relationship to user
+    user = relationship("User", back_populates="workouts")
+
+    # Constraints
+    __table_args__ = (
+        CheckConstraint("end_time > start_time", name="ck_valid_workout_duration"),
+        UniqueConstraint("user_id", "start_time", name="uq_workout"),
+        Index("idx_workouts_user_type_date", "user_id", "workout_type", "start_time"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Workout(type='{self.workout_type}', start={self.start_time}, duration={self.duration_minutes}min)>"

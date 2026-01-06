@@ -8,6 +8,7 @@ from src.db.models import (
     HeartRateMetric,
     CardioFitness,
     SleepSession,
+    Workout,
 )
 from src.db.session import engine, SessionLocal, get_db, get_db_context
 
@@ -19,6 +20,7 @@ __all__ = [
     "HeartRateMetric",
     "CardioFitness",
     "SleepSession",
+    "Workout",
     "engine",
     "SessionLocal",
     "get_db",
