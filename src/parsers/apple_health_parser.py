@@ -40,6 +40,19 @@ class VO2MaxRecord(TypedDict):
     source: str
 
 
+class SleepSessionRecord(TypedDict):
+    """Type definition for sleep session records."""
+
+    start_time: datetime
+    end_time: datetime
+    total_duration_minutes: int
+    awake_minutes: int
+    rem_minutes: int
+    core_minutes: int
+    deep_minutes: int
+    source: str
+
+
 class AppleHealthParser:
     """Parser for Apple Health export XML files."""
 
@@ -584,3 +597,159 @@ class AppleHealthParser:
         # Sort by date (oldest first)
         results.sort(key=lambda x: x["recorded_at"])
         return results
+
+    def parse_sleep_from_file(self, file_path: str | Path) -> list[SleepSessionRecord]:
+        """
+        Parse sleep session data from Apple Health export.
+
+        Groups sleep stage records into complete sessions using 2-hour gap detection.
+        Includes InBed time in total duration. Only processes staged sleep data
+        (Deep, Core, REM, Awake, InBed) from Apple Watch Series 7+.
+
+        Sleep sessions can span calendar days (e.g., sleep 11pm Jan 3 → wake 7am Jan 4).
+        Uses 2-hour gap threshold to detect separate sessions (handles naps vs night sleep).
+
+        Args:
+            file_path: Path to export.xml file
+
+        Returns:
+            List of complete sleep sessions with stage breakdowns and optional sleep scores
+        """
+        from datetime import timedelta
+
+        # Step 1: Extract all sleep stage records
+        all_records: list[dict] = []
+
+        context = ET.iterparse(file_path, events=("end",))
+
+        for event, elem in context:
+            # Parse sleep stage records
+            if (
+                elem.tag == "Record"
+                and elem.get("type") == "HKCategoryTypeIdentifierSleepAnalysis"
+            ):
+                try:
+                    value_str = elem.get("value")
+                    start_str = elem.get("startDate")
+                    end_str = elem.get("endDate")
+
+                    if not value_str or not start_str or not end_str:
+                        continue
+
+                    # Map Apple Health sleep values to our schema
+                    # HKCategoryValueSleepAnalysisInBed → "inbed"
+                    # HKCategoryValueSleepAnalysisAwake → "awake"
+                    # etc.
+                    value_mapping = {
+                        # InBed tracking
+                        "HKCategoryValueSleepAnalysisInBed": "inbed",
+                        # Older Apple Watch models (pre-watchOS 9)
+                        "HKCategoryValueSleepAnalysisAsleep": "core",
+                        "HKCategoryValueSleepAnalysisAsleepUnspecified": "core",
+                        # Apple Watch  with watchOS 9+ (staged sleep)
+                        "HKCategoryValueSleepAnalysisAwake": "awake",
+                        "HKCategoryValueSleepAnalysisAsleepREM": "rem",
+                        "HKCategoryValueSleepAnalysisAsleepCore": "core",
+                        "HKCategoryValueSleepAnalysisAsleepDeep": "deep",
+                    }
+
+                    stage = value_mapping.get(value_str)
+                    if not stage:
+                        continue  # Unknown sleep stage, skip
+
+                    start_time = datetime.strptime(
+                        start_str, "%Y-%m-%d %H:%M:%S %z"
+                    ).replace(tzinfo=None)
+                    end_time = datetime.strptime(
+                        end_str, "%Y-%m-%d %H:%M:%S %z"
+                    ).replace(tzinfo=None)
+
+                    duration_minutes = int((end_time - start_time).total_seconds() / 60)
+
+                    all_records.append(
+                        {
+                            "start": start_time,
+                            "end": end_time,
+                            "value": stage,
+                            "duration_minutes": duration_minutes,
+                        }
+                    )
+
+                except (ValueError, TypeError):
+                    continue
+                finally:
+                    elem.clear()
+
+        if not all_records:
+            return []
+
+        # Step 2: Sort by start time (chronological order)
+        all_records.sort(key=lambda x: x["start"])
+
+        # Step 3: Group into sessions using 2-hour gap detection
+        sessions: list[SleepSessionRecord] = []
+        current_session: list[dict] = []
+        GAP_THRESHOLD = timedelta(hours=2)
+
+        for record in all_records:
+            if not current_session:
+                # Start first session
+                current_session.append(record)
+            else:
+                # Check gap between last record and current
+                gap = record["start"] - current_session[-1]["end"]
+
+                if gap > GAP_THRESHOLD:
+                    # Gap too large → finalize current session and start new one
+                    sessions.append(self._aggregate_sleep_session(current_session))
+                    current_session = [record]
+                else:
+                    # Continue current session
+                    current_session.append(record)
+
+        # Don't forget the last session!
+        if current_session:
+            sessions.append(self._aggregate_sleep_session(current_session))
+
+        return sessions
+
+    def _aggregate_sleep_session(self, records: list[dict]) -> SleepSessionRecord:
+        """
+        Aggregate individual sleep stage records into a complete session.
+
+        Calculates total duration and sums each sleep stage.
+
+        Args:
+            records: List of sleep stage records for a single session
+
+        Returns:
+            Aggregated sleep session record
+        """
+        # Find session boundaries
+        start_time = min(r["start"] for r in records)
+        end_time = max(r["end"] for r in records)
+
+        # Sum durations by stage
+        stage_minutes = {"deep": 0, "core": 0, "rem": 0, "awake": 0}
+
+        for record in records:
+            stage = record["value"]
+            duration = record["duration_minutes"]
+
+            if stage in stage_minutes:
+                stage_minutes[stage] += duration
+            # "inbed" is included in total duration but not counted as a sleep stage
+
+        # Calculate total duration (includes InBed time)
+        total_duration = int((end_time - start_time).total_seconds() / 60)
+
+        return {
+            "start_time": start_time,
+            "end_time": end_time,
+            "total_duration_minutes": total_duration,
+            "deep_minutes": stage_minutes["deep"],
+            "core_minutes": stage_minutes["core"],
+            "rem_minutes": stage_minutes["rem"],
+            "awake_minutes": stage_minutes["awake"],
+            "source": "apple_health",
+        }
