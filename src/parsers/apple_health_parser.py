@@ -472,13 +472,13 @@ class AppleHealthParser:
         """
         Parse Heart Rate Variability (HRV) records and aggregate by date.
 
-        HRV can have multiple readings per day, so we take the average.
-
-        Args:
-            file_path: Path to export.xml file
-
+        HRV can have multiple readings per day. We take the MAXIMUM value as this
+        represents peak cardiovascular recovery capacity (typically during deep sleep).
+        Maximum HRV is a better indicator of heart health than average, as it shows
+        what your heart can achieve when fully rested.
+        ...
         Returns:
-            List of daily HRV averages (in milliseconds)
+        List of daily maximum HRV values (in milliseconds)
         """
         # Aggregate HRV by date (multiple readings per day)
         daily_hrv: defaultdict[date, list[Decimal]] = defaultdict(list)
@@ -511,7 +511,7 @@ class AppleHealthParser:
         # Calculate daily averages
         results: list[MetricResult] = []
         for record_date, values in daily_hrv.items():
-            avg_hrv = Decimal(sum(values) / len(values))
+            avg_hrv = max(values)
             results.append(
                 {
                     "metric_type": "hrv",
