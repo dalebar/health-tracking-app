@@ -1,6 +1,6 @@
 # Health Tracking App
 
-A production-grade health data pipeline that imports Apple Health metrics into PostgreSQL for analysis and visualization.
+A health data pipeline that imports Apple Health metrics into PostgreSQL for analysis and visualization.
 
 ## Features
 
