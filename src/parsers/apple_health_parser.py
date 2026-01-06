@@ -32,6 +32,14 @@ class WeightRecord(TypedDict):
     source: str
 
 
+class VO2MaxRecord(TypedDict):
+    """Type definition for VO2 max records."""
+
+    vo2_max: Decimal
+    recorded_at: datetime
+    source: str
+
+
 class AppleHealthParser:
     """Parser for Apple Health export XML files."""
 
@@ -524,4 +532,55 @@ class AppleHealthParser:
             )
 
         results.sort(key=lambda x: x["date"])
+        return results
+
+    def parse_vo2_max_from_file(self, file_path: str | Path) -> list[VO2MaxRecord]:
+        """
+        Parse VO2 max (cardio fitness) records.
+
+        VO2 max is calculated periodically by Apple Watch and represents
+        cardiovascular fitness level (ml/kg/min). Higher values = better fitness.
+
+        Args:
+            file_path: Path to export.xml file
+
+        Returns:
+            List of VO2 max measurements
+        """
+        results: list[VO2MaxRecord] = []
+        context = ET.iterparse(file_path, events=("end",))
+
+        for event, elem in context:
+            if (
+                elem.tag == "Record"
+                and elem.get("type") == "HKQuantityTypeIdentifierVO2Max"
+            ):
+                try:
+                    value_str = elem.get("value")
+                    date_str = elem.get("startDate")
+                    source = elem.get("sourceName")
+
+                    if not value_str or not date_str:
+                        continue
+
+                    value = Decimal(value_str)
+                    recorded_at = datetime.strptime(
+                        date_str, "%Y-%m-%d %H:%M:%S %z"
+                    ).replace(tzinfo=None)
+
+                    results.append(
+                        {
+                            "vo2_max": value,
+                            "recorded_at": recorded_at,
+                            "source": source or "apple_health",
+                        }
+                    )
+
+                except (ValueError, TypeError):
+                    continue
+                finally:
+                    elem.clear()
+
+        # Sort by date (oldest first)
+        results.sort(key=lambda x: x["recorded_at"])
         return results
