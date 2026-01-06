@@ -8,15 +8,17 @@ from pathlib import Path
 from src.db.models import User, BodyMetric
 from src.db.session import get_db_context
 from src.parsers.apple_health_parser import AppleHealthParser
+from src.utils.import_helpers import (
+    import_records,
+    display_import_summary,
+    display_section_header,
+)
 
 
 def main():
     """Import weight measurements from Apple Health export."""
 
-    print("=" * 70)
-    print("Apple Health Weight Import")
-    print("=" * 70)
-    print()
+    display_section_header("Apple Health Weight Import")
 
     export_path = Path(
         "/Users/daleb/Documents/health/apple_health_export_2026/apple_health_export/export.xml"
@@ -59,44 +61,17 @@ def main():
 
         user_id = user.id  # Store ID before session closes
 
-        inserted_count = 0
-        skipped_count = 0
-
-        for record in weight_records:
-            existing = (
-                db.query(BodyMetric)
-                .filter(
-                    BodyMetric.user_id == user_id,
-                    BodyMetric.metric_type == "weight",
-                    BodyMetric.recorded_at == record["recorded_at"],
-                )
-                .first()
-            )
-
-            if existing:
-                skipped_count += 1
-                continue
-
-            metric = BodyMetric(
-                user_id=user_id,
-                metric_type=record["metric_type"],
-                value=record["value"],
-                unit=record["unit"],
-                recorded_at=record["recorded_at"],
-                source=record["source"],
-            )
-            db.add(metric)
-            inserted_count += 1
-
-            if inserted_count % 100 == 0:
-                db.commit()
-                print(f"  Inserted {inserted_count} records...")
-
-        db.commit()
+        inserted_count, skipped_count = import_records(
+            db=db,
+            user_id=user_id,
+            records=weight_records,
+            model_class=BodyMetric,
+            filter_keys=["metric_type", "recorded_at"],
+            metric_name="Weight",
+        )
 
     print()
-    print(f"✅ Inserted: {inserted_count} new records")
-    print(f"⏭️  Skipped: {skipped_count} existing records")
+    display_import_summary("Weight", inserted_count, skipped_count)
     print()
 
     print("=" * 70)

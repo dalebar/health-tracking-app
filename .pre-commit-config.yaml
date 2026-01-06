@@ -23,6 +23,7 @@ repos:
       - id: mypy
         additional_dependencies: ["types-sqlalchemy"]
         args: [--ignore-missing-imports, --check-untyped-defs]
+        exclude: ^scripts/
 
   # Bandit - Security linter
   - repo: https://github.com/PyCQA/bandit

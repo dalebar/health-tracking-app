@@ -12,6 +12,11 @@ from typing import TypedDict
 from src.db.models import User, ActivityMetric
 from src.db.session import get_db_context
 from src.parsers.apple_health_parser import AppleHealthParser
+from src.utils.import_helpers import (
+    import_records,
+    display_import_summary,
+    display_section_header,
+)
 
 
 class MetricsByDay(TypedDict, total=False):
@@ -22,53 +27,10 @@ class MetricsByDay(TypedDict, total=False):
     exercise_minutes: Decimal
 
 
-def import_metric(parser_method, metric_name, user_id, db, records):
-    """Helper to import a metric type."""
-    inserted = 0
-    skipped = 0
-
-    for record in records:
-        existing = (
-            db.query(ActivityMetric)
-            .filter(
-                ActivityMetric.user_id == user_id,
-                ActivityMetric.metric_type == record["metric_type"],
-                ActivityMetric.date == record["date"],
-            )
-            .first()
-        )
-
-        if existing:
-            skipped += 1
-            continue
-
-        metric = ActivityMetric(
-            user_id=user_id,
-            metric_type=record["metric_type"],
-            value=record["value"],
-            unit=record["unit"],
-            date=record["date"],
-            recorded_at=record["recorded_at"],
-            source=record["source"],
-        )
-        db.add(metric)
-        inserted += 1
-
-        if inserted % 100 == 0:
-            db.commit()
-            print(f"  {metric_name}: {inserted} records...")
-
-    db.commit()
-    return inserted, skipped
-
-
 def main():
     """Import activity metrics from Apple Health export."""
 
-    print("=" * 70)
-    print("Apple Health Activity Metrics Import")
-    print("=" * 70)
-    print()
+    display_section_header("Apple Health Activity Metrics Import")
 
     export_path = Path(
         "/Users/daleb/Documents/health/apple_health_export_2026/apple_health_export/export.xml"
@@ -103,16 +65,26 @@ def main():
 
     with get_db_context() as db:
         # Active Energy
-        inserted_e, skipped_e = import_metric(
-            None, "Active Energy", user_id, db, energy_records
+        inserted_e, skipped_e = import_records(
+            db=db,
+            user_id=user_id,
+            records=energy_records,
+            model_class=ActivityMetric,
+            filter_keys=["metric_type", "date"],
+            metric_name="Active Energy",
         )
-        print(f"✅ Active Energy: {inserted_e} inserted, {skipped_e} skipped")
+        display_import_summary("Active Energy", inserted_e, skipped_e)
 
         # Exercise Minutes
-        inserted_ex, skipped_ex = import_metric(
-            None, "Exercise Minutes", user_id, db, exercise_records
+        inserted_ex, skipped_ex = import_records(
+            db=db,
+            user_id=user_id,
+            records=exercise_records,
+            model_class=ActivityMetric,
+            filter_keys=["metric_type", "date"],
+            metric_name="Exercise Minutes",
         )
-        print(f"✅ Exercise Minutes: {inserted_ex} inserted, {skipped_ex} skipped")
+        display_import_summary("Exercise Minutes", inserted_ex, skipped_ex)
 
     print()
     print("=" * 70)

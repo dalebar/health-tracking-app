@@ -36,3 +36,8 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 .dockerignore
+
+# Exports (large files)
+*.xml
+export_*.zip
+apple_health_export/

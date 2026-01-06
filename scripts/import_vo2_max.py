@@ -8,15 +8,17 @@ from pathlib import Path
 from src.db.models import User, CardioFitness
 from src.db.session import get_db_context
 from src.parsers.apple_health_parser import AppleHealthParser
+from src.utils.import_helpers import (
+    import_records,
+    display_import_summary,
+    display_section_header,
+)
 
 
 def main():
     """Import VO2 max measurements from Apple Health export."""
 
-    print("=" * 70)
-    print("Apple Health VO2 Max Import")
-    print("=" * 70)
-    print()
+    display_section_header("Apple Health VO2 Max Import")
 
     export_path = Path(
         "/Users/daleb/Documents/health/apple_health_export_2026/apple_health_export/export.xml"
@@ -45,39 +47,16 @@ def main():
     print("💾 Importing to database...")
 
     with get_db_context() as db:
-        inserted = 0
-        skipped = 0
-
-        for record in vo2_records:
-            existing = (
-                db.query(CardioFitness)
-                .filter(
-                    CardioFitness.user_id == user_id,
-                    CardioFitness.recorded_at == record["recorded_at"],
-                )
-                .first()
-            )
-
-            if existing:
-                skipped += 1
-                continue
-
-            fitness = CardioFitness(
-                user_id=user_id,
-                vo2_max=record["vo2_max"],
-                recorded_at=record["recorded_at"],
-                source=record["source"],
-            )
-            db.add(fitness)
-            inserted += 1
-
-            if inserted % 50 == 0:
-                db.commit()
-                print(f"  VO2 max: {inserted} records...")
-
-        db.commit()
-
-        print(f"✅ VO2 max: {inserted} inserted, {skipped} skipped")
+        inserted, skipped = import_records(
+            db=db,
+            user_id=user_id,
+            records=vo2_records,
+            model_class=CardioFitness,
+            filter_keys=["recorded_at"],
+            batch_size=50,
+            metric_name="VO2 max",
+        )
+        display_import_summary("VO2 max", inserted, skipped)
 
     print()
     print("=" * 70)

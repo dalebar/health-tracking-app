@@ -8,55 +8,17 @@ from pathlib import Path
 from src.db.models import User, HeartRateMetric
 from src.db.session import get_db_context
 from src.parsers.apple_health_parser import AppleHealthParser
-
-
-def import_metric(metric_name, user_id, db, records):
-    """Helper to import a heart rate metric type."""
-    inserted = 0
-    skipped = 0
-
-    for record in records:
-        existing = (
-            db.query(HeartRateMetric)
-            .filter(
-                HeartRateMetric.user_id == user_id,
-                HeartRateMetric.metric_type == record["metric_type"],
-                HeartRateMetric.date == record["date"],
-            )
-            .first()
-        )
-
-        if existing:
-            skipped += 1
-            continue
-
-        metric = HeartRateMetric(
-            user_id=user_id,
-            metric_type=record["metric_type"],
-            value=record["value"],
-            unit=record["unit"],
-            date=record["date"],
-            recorded_at=record["recorded_at"],
-            source=record["source"],
-        )
-        db.add(metric)
-        inserted += 1
-
-        if inserted % 100 == 0:
-            db.commit()
-            print(f"  {metric_name}: {inserted} records...")
-
-    db.commit()
-    return inserted, skipped
+from src.utils.import_helpers import (
+    import_records,
+    display_import_summary,
+    display_section_header,
+)
 
 
 def main():
     """Import heart rate metrics from Apple Health export."""
 
-    print("=" * 70)
-    print("Apple Health Heart Rate Metrics Import")
-    print("=" * 70)
-    print()
+    display_section_header("Apple Health Heart Rate Metrics Import")
 
     export_path = Path(
         "/Users/daleb/Documents/health/apple_health_export_2026/apple_health_export/export.xml"
@@ -96,20 +58,37 @@ def main():
 
     with get_db_context() as db:
         # Resting HR
-        inserted_r, skipped_r = import_metric(
-            "Resting HR", user_id, db, resting_hr_records
+        inserted_r, skipped_r = import_records(
+            db=db,
+            user_id=user_id,
+            records=resting_hr_records,
+            model_class=HeartRateMetric,
+            filter_keys=["metric_type", "date"],
+            metric_name="Resting HR",
         )
-        print(f"✅ Resting HR: {inserted_r} inserted, {skipped_r} skipped")
+        display_import_summary("Resting HR", inserted_r, skipped_r)
 
         # Walking HR
-        inserted_w, skipped_w = import_metric(
-            "Walking HR", user_id, db, walking_hr_records
+        inserted_w, skipped_w = import_records(
+            db=db,
+            user_id=user_id,
+            records=walking_hr_records,
+            model_class=HeartRateMetric,
+            filter_keys=["metric_type", "date"],
+            metric_name="Walking HR",
         )
-        print(f"✅ Walking HR: {inserted_w} inserted, {skipped_w} skipped")
+        display_import_summary("Walking HR", inserted_w, skipped_w)
 
         # HRV
-        inserted_h, skipped_h = import_metric("HRV", user_id, db, hrv_records)
-        print(f"✅ HRV: {inserted_h} inserted, {skipped_h} skipped")
+        inserted_h, skipped_h = import_records(
+            db=db,
+            user_id=user_id,
+            records=hrv_records,
+            model_class=HeartRateMetric,
+            filter_keys=["metric_type", "date"],
+            metric_name="HRV",
+        )
+        display_import_summary("HRV", inserted_h, skipped_h)
 
     print()
     print("=" * 70)

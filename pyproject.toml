@@ -31,6 +31,12 @@ dev = [
 exclude_dirs = ["tests"]
 skips = ["B101"]
 
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+exclude = ["scripts/"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

@@ -8,15 +8,17 @@ from pathlib import Path
 from src.db.models import User, ActivityMetric
 from src.db.session import get_db_context
 from src.parsers.apple_health_parser import AppleHealthParser
+from src.utils.import_helpers import (
+    import_records,
+    display_import_summary,
+    display_section_header,
+)
 
 
 def main():
     """Import step counts from Apple Health export."""
 
-    print("=" * 70)
-    print("Apple Health Steps Import")
-    print("=" * 70)
-    print()
+    display_section_header("Apple Health Steps Import")
 
     export_path = Path(
         "/Users/daleb/Documents/health/apple_health_export_2026/apple_health_export/export.xml"
@@ -73,48 +75,17 @@ def main():
 
         user_id = user.id
 
-        inserted_count = 0
-        skipped_count = 0
-
-        for record in step_records:
-            # Check if record already exists
-            existing = (
-                db.query(ActivityMetric)
-                .filter(
-                    ActivityMetric.user_id == user_id,
-                    ActivityMetric.metric_type == "steps",
-                    ActivityMetric.date == record["date"],
-                )
-                .first()
-            )
-
-            if existing:
-                skipped_count += 1
-                continue
-
-            # Insert new record
-            metric = ActivityMetric(
-                user_id=user_id,
-                metric_type=record["metric_type"],
-                value=record["value"],
-                unit=record["unit"],
-                date=record["date"],
-                recorded_at=record["recorded_at"],
-                source=record["source"],
-            )
-            db.add(metric)
-            inserted_count += 1
-
-            # Commit in batches
-            if inserted_count % 100 == 0:
-                db.commit()
-                print(f"  Inserted {inserted_count} records...")
-
-        db.commit()
+        inserted_count, skipped_count = import_records(
+            db=db,
+            user_id=user_id,
+            records=step_records,
+            model_class=ActivityMetric,
+            filter_keys=["metric_type", "date"],
+            metric_name="Steps",
+        )
 
     print()
-    print(f"✅ Inserted: {inserted_count} new records")
-    print(f"⏭️  Skipped: {skipped_count} existing records")
+    display_import_summary("Steps", inserted_count, skipped_count)
     print()
 
     # Display recent activity

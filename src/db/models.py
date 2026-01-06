@@ -20,7 +20,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
-from typing import Any
+from typing import Any, Optional
+from decimal import Decimal
 
 # Base class for all models
 # All tables will inherit from this
@@ -45,7 +46,7 @@ class User(Base):
     name = Column(String(255), nullable=False)
 
     # Physical attributes for health calculations
-    height_cm = Column(DECIMAL(5, 2))  # e.g., 185.50 cm
+    height_cm: Optional[Decimal] = Column(DECIMAL(5, 2))  # type: ignore[assignment]
     date_of_birth = Column(Date)  # For age-based calculations (VO2 max, etc.)
 
     # Audit timestamps - automatically managed
@@ -95,7 +96,7 @@ class BodyMetric(Base):
 
     # Metric identification
     metric_type = Column(String(50), nullable=False)  # 'weight', 'body_fat', 'bmi'
-    value = Column(DECIMAL(10, 3), nullable=False)  # The measurement value
+    value: Decimal = Column(DECIMAL(10, 3), nullable=False)  # type: ignore[assignment]
     unit = Column(String(20), nullable=False)  # 'kg', '%', etc.
 
     # Temporal information
@@ -145,7 +146,7 @@ class ActivityMetric(Base):
     metric_type = Column(
         String(50), nullable=False
     )  # 'steps', 'active_energy', 'exercise_minutes'
-    value = Column(DECIMAL(10, 3), nullable=False)
+    value: Decimal = Column(DECIMAL(10, 3), nullable=False)  # type: ignore[assignment]
     unit = Column(String(20), nullable=False)  # 'count', 'kcal', 'minutes'
 
     # Temporal information
@@ -189,7 +190,7 @@ class HeartRateMetric(Base):
     metric_type = Column(
         String(50), nullable=False
     )  # 'resting_hr', 'walking_hr', 'hrv'
-    value = Column(DECIMAL(10, 3), nullable=False)
+    value: Decimal = Column(DECIMAL(10, 3), nullable=False)  # type: ignore[assignment]
     unit = Column(String(20), nullable=False)  # 'bpm', 'ms'
 
     # Temporal information
@@ -230,7 +231,7 @@ class CardioFitness(Base):
     )
 
     # Measurement
-    vo2_max = Column(DECIMAL(5, 2), nullable=False)  # e.g., 45.20 ml/kg/min
+    vo2_max: Decimal = Column(DECIMAL(5, 2), nullable=False)  # type: ignore[assignment]
 
     # Temporal information
     recorded_at = Column(TIMESTAMP, nullable=False)

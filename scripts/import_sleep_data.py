@@ -8,15 +8,17 @@ from pathlib import Path
 from src.db.models import User, SleepSession
 from src.db.session import get_db_context
 from src.parsers.apple_health_parser import AppleHealthParser
+from src.utils.import_helpers import (
+    import_records,
+    display_import_summary,
+    display_section_header,
+)
 
 
 def main():
     """Import sleep sessions from Apple Health export."""
 
-    print("=" * 70)
-    print("Apple Health Sleep Data Import")
-    print("=" * 70)
-    print()
+    display_section_header("Apple Health Sleep Data Import")
 
     export_path = Path(
         "/Users/daleb/Documents/health/apple_health_export_2026/apple_health_export/export.xml"
@@ -57,48 +59,17 @@ def main():
     print("💾 Importing to database...")
 
     with get_db_context() as db:
-        inserted = 0
-        skipped = 0
-
-        for record in sleep_sessions:
-            # Check if session already exists
-            existing = (
-                db.query(SleepSession)
-                .filter(
-                    SleepSession.user_id == user_id,
-                    SleepSession.start_time == record["start_time"],
-                )
-                .first()
-            )
-
-            if existing:
-                skipped += 1
-                continue
-
-            # Insert new session
-            session = SleepSession(
-                user_id=user_id,
-                start_time=record["start_time"],
-                end_time=record["end_time"],
-                total_duration_minutes=record["total_duration_minutes"],
-                awake_minutes=record["awake_minutes"],
-                rem_minutes=record["rem_minutes"],
-                core_minutes=record["core_minutes"],
-                deep_minutes=record["deep_minutes"],
-                source=record["source"],
-            )
-            db.add(session)
-            inserted += 1
-
-            # Batch commit
-            if inserted % 50 == 0:
-                db.commit()
-                print(f"  Sleep sessions: {inserted} records...")
-
-        db.commit()
-
-    print(f"✅ Sleep sessions: {inserted} inserted, {skipped} skipped")
-    print()
+        inserted, skipped = import_records(
+            db=db,
+            user_id=user_id,
+            records=sleep_sessions,
+            model_class=SleepSession,
+            filter_keys=["start_time"],
+            batch_size=50,
+            metric_name="Sleep sessions",
+        )
+        display_import_summary("Sleep sessions", inserted, skipped)
+        print()
 
     # Display summary
     print("=" * 70)
