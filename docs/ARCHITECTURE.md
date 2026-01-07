@@ -27,6 +27,7 @@ Uses `ET.iterparse()` to process 1.65GB XML file without loading entire file int
 - **Steps/Energy/Exercise**: Sum by date
 - **Heart Rate**: Average by date (resting, walking), Maximum by date (HRV)
 - **Sleep**: 2-hour gap detection groups records into sessions
+- **Workouts**: Individual sessions (no aggregation), duplicates handled by start_time uniqueness
 
 ### Type Safety
 
@@ -35,6 +36,7 @@ All parsers return TypedDict objects:
 - `WeightRecord` - Timestamp-based measurements
 - `VO2MaxRecord` - Fitness measurements
 - `SleepSessionRecord` - Complete sleep sessions
+- `WorkoutRecord` - Individual workout sessions with metrics
 
 ## Database Design
 
@@ -56,6 +58,31 @@ Created on frequently queried columns:
 - `(user_id, metric_type, date)` for activity/HR metrics
 - `(user_id, recorded_at)` for body metrics
 - `(user_id, start_time)` for sleep sessions
+- `(user_id, workout_type, start_time)` for workouts
+
+### Database Tables
+
+#### workouts
+Stores individual workout sessions with comprehensive performance metrics.
+
+**Key Fields:**
+- `workout_type`: Type of activity (Boxing, Running, Walking, Cycling, etc.)
+- `start_time`, `end_time`: Workout timing with timezone
+- `duration_minutes`: Total workout duration
+- `active_energy_kcal`, `basal_energy_kcal`, `total_energy_kcal`: Energy expenditure breakdown
+- `distance_km`: Distance covered (for cardio activities)
+- `avg_heart_rate_bpm`, `min_heart_rate_bpm`, `max_heart_rate_bpm`: Heart rate metrics during workout
+- `indoor_workout`: Boolean flag for indoor/outdoor classification
+- `source`: Data source (e.g., "Apple Watch", "Strava")
+
+**Constraints:**
+- Unique constraint on `user_id` + `start_time` (prevents duplicate workouts)
+- Check constraint ensuring `end_time > start_time`
+- Index on `(user_id, workout_type, start_time)` for efficient queries
+
+**Notes:**
+- Duplicate workouts (same start_time) are deduplicated during import, keeping the record with most complete data
+- Heart rate zones are calculated on-demand from aggregate HR metrics, not stored
 
 ## Import Strategy
 

@@ -4,25 +4,54 @@ A health data pipeline that imports Apple Health metrics into PostgreSQL for ana
 
 ## Features
 
-- **Comprehensive Data Import**: Weight, steps, activity, heart rate (resting, walking, HRV), VO2 max, sleep sessions
+- **Comprehensive Data Import**: Weight, steps, activity, heart rate (resting, walking, HRV), VO2 max, sleep sessions, workouts
 - **Type-Safe Parsing**: Full TypedDict usage with memory-efficient XML parsing
 - **Database Migrations**: Alembic-managed schema with proper constraints
 - **Test Coverage**: Integration and unit tests with real data validation
 - **Professional Tooling**: Pre-commit hooks, linting, type checking, security scanning
 
-## Metrics Tracked
+### Current Metrics Supported
+
+**Activity Metrics:**
+- Daily steps
+- Active energy (exercise calories)
+- Resting energy (basal metabolic rate)
+- Exercise minutes
+
+**Heart Metrics:**
+- Resting heart rate
+- Walking/running heart rate
+- Heart rate variability (HRV)
+
+**Body Metrics:**
+- Weight
+- VO2 Max
+
+**Sleep:**
+- Sleep sessions (using 2-hour gap detection)
+
+**Workouts:**
+- Workout sessions with type, duration, and energy
+- Heart rate data (average, min, max)
+- Distance tracking for cardio activities
+- Indoor/outdoor classification
+- Supported types: Boxing, Running, Walking, Cycling, and more
+
+## Data Volume
 
 | Metric | Records | Aggregation |
 |--------|---------|-------------|
 | Weight | 18 | Individual measurements |
 | Steps | 1,255 days | Daily totals |
 | Active Energy | 1.1M+ records | Daily totals |
+| Resting Energy | 1.1M+ records | Daily totals |
 | Exercise Minutes | 60K+ records | Daily totals |
 | Resting Heart Rate | 990 | Daily averages |
 | Walking Heart Rate | 926 | Daily averages |
 | HRV | 8,244 records | Daily maximum |
 | VO2 Max | 221 | Individual measurements |
 | Sleep Sessions | 1,233 | Multi-stage sessions |
+| Workouts | 658 | Individual workout sessions |
 
 ## Architecture
 
@@ -47,13 +76,14 @@ health-tracking-app/
 
 ### Database Schema
 
-**6 Tables:**
+**7 Tables:**
 - `users` - User profiles
 - `body_metrics` - Weight, BMI, body fat %
-- `activity_metrics` - Steps, energy, exercise (daily aggregates)
+- `activity_metrics` - Steps, energy (active & resting), exercise (daily aggregates)
 - `heart_rate_metrics` - Resting HR, walking HR, HRV (daily aggregates)
 - `cardio_fitness` - VO2 max measurements
 - `sleep_sessions` - Complete sleep sessions with stage breakdowns
+- `workouts` - Individual workout sessions with metrics and heart rate data
 
 **Key Design Decisions:**
 - Flexible `metric_type` columns support multiple metrics without schema changes
@@ -116,6 +146,7 @@ python scripts/import_activity_metrics.py
 python scripts/import_heart_rate_metrics.py
 python scripts/import_vo2_max.py
 python scripts/import_sleep_data.py
+python scripts/import_workouts.py
 ```
 
 ## Testing
