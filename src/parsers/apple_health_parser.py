@@ -388,6 +388,63 @@ class AppleHealthParser:
         results.sort(key=lambda x: x["date"])
         return results
 
+    def parse_resting_energy_from_file(
+        self, file_path: str | Path
+    ) -> list[MetricResult]:
+        """
+        Parse resting energy (basal metabolic rate) records and aggregate by date.
+
+        Resting energy represents calories burned at rest throughout the day.
+        Combined with active energy, this gives total daily energy expenditure (TDEE).
+
+        Args:
+            file_path: Path to export.xml file
+
+        Returns:
+            List of daily resting energy totals (kcal)
+        """
+        daily_resting: defaultdict[date, Decimal] = defaultdict(Decimal)
+        context = ET.iterparse(file_path, events=("end",))
+
+        for event, elem in context:
+            if (
+                elem.tag == "Record"
+                and elem.get("type") == "HKQuantityTypeIdentifierBasalEnergyBurned"
+            ):
+                try:
+                    value_str = elem.get("value")
+                    date_str = elem.get("startDate")
+
+                    if not value_str or not date_str:
+                        continue
+
+                    value = Decimal(value_str)
+                    recorded_at = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S %z")
+                    record_date = recorded_at.date()
+
+                    daily_resting[record_date] += value
+
+                except (ValueError, TypeError):
+                    continue
+                finally:
+                    elem.clear()
+
+        results: list[MetricResult] = []
+        for record_date, total_resting in daily_resting.items():
+            results.append(
+                {
+                    "metric_type": "resting_energy",
+                    "value": total_resting,
+                    "unit": "kcal",
+                    "date": record_date,
+                    "recorded_at": datetime.combine(record_date, datetime.min.time()),
+                    "source": "apple_health",
+                }
+            )
+
+        results.sort(key=lambda x: x["date"])
+        return results
+
     def parse_resting_heart_rate_from_file(
         self, file_path: str | Path
     ) -> list[MetricResult]:
