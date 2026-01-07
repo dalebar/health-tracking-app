@@ -192,14 +192,51 @@ Automatically run on `git commit`:
 - Trailing whitespace removal
 - YAML validation
 
+## MCP Integration (Phase 4)
+
+The Health Tracking app includes an MCP (Model Context Protocol) server that enables Claude to query your health data through natural language in the Claude Desktop app.
+
+### Quick Start
+
+1. **Start the API:**
+   ```bash
+   uvicorn src.api.main:app --reload --port 8000
+   ```
+
+2. **Configure Claude Desktop:**
+
+   Edit config file:
+   - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+   Add:
+   ```json
+   {
+     "mcpServers": {
+       "health-tracking": {
+         "command": "python",
+         "args": ["-m", "src.mcp.server"],
+         "cwd": "/path/to/health-tracking-app"
+       }
+     }
+   }
+   ```
+
+3. **Restart Claude Desktop**
+
+4. **Ask Claude questions:**
+   - "What's my current weight?"
+   - "Show me my boxing stats for January"
+   - "Am I on track to hit my goal?"
+
+See `src/mcp/README.md` for complete documentation.
+
 ## Future Enhancements
 
-- FastAPI REST endpoints
-- Streamlit visualization dashboard
-- MCP server for Claude integration
 - Automated data sync (iOS Shortcuts + Mac app)
 - MyFitnessPal nutrition integration
 - Predictive analytics and correlations
+- Additional health metrics (blood pressure, glucose, etc.)
 
 ## License
 
