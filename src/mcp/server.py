@@ -242,7 +242,15 @@ def get_boxing_workouts(days: int = 30, limit: int = 100) -> Any:
     Returns:
         dict: Boxing workouts with HR, calories, and duration data
     """
-    return get_workouts(workout_type="Boxing", days=days, limit=limit)  # type: ignore[operator]
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days)
+    params: dict[str, Any] = {
+        "workout_type": "Boxing",
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "limit": limit,
+    }
+    return _get("/api/v1/workouts", params=params)
 
 
 # ============================================================================
@@ -259,11 +267,39 @@ def get_weekly_summary() -> Any:
     Returns:
         dict: Complete weekly summary across all metrics
     """
+    end_date = date.today()
+    start_date = end_date - timedelta(days=7)
+
+    # Get weight trend
+    weight = _get("/api/v1/body/weight/trend", params={"days": 7})
+
+    # Get activity summary
+    activity_params: dict[str, Any] = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+    }
+    activity = _get("/api/v1/activity/summary", params=activity_params)
+
+    # Get workouts
+    workout_params: dict[str, Any] = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "limit": 100,
+    }
+    workouts = _get("/api/v1/workouts", params=workout_params)
+
+    # Get workout stats
+    stats_params: dict[str, Any] = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+    }
+    workout_stats = _get("/api/v1/workouts/stats/by-type", params=stats_params)
+
     return {
-        "weight": get_weight_trend(days=7),  # type: ignore[operator]
-        "activity": get_activity_summary(days=7),  # type: ignore[operator]
-        "workouts": get_workouts(days=7, limit=100),  # type: ignore[operator]
-        "workout_stats": get_workout_stats(days=7),  # type: ignore[operator]
+        "weight": weight,
+        "activity": activity,
+        "workouts": workouts,
+        "workout_stats": workout_stats,
     }
 
 
@@ -275,8 +311,8 @@ def get_progress_to_goal() -> Any:
     Returns:
         dict: Current weight, goal, remaining, progress percentage, and pace
     """
-    latest = get_latest_weight()  # type: ignore[operator]
-    trend = get_weight_trend(days=30)  # type: ignore[operator]
+    latest = _get("/api/v1/body/weight/latest")
+    trend = _get("/api/v1/body/weight/trend", params={"days": 30})
 
     if "error" in latest or "error" in trend:
         return {"error": "Unable to fetch weight data"}
@@ -342,7 +378,13 @@ def compare_training_periods(
     start2 = end2 - timedelta(days=period2_days)
 
     # Get data for both periods
-    workouts1 = get_workouts(days=period1_days, limit=200)  # type: ignore[operator]
+    workouts1_params: dict[str, Any] = {
+        "start_date": start1.isoformat(),
+        "end_date": end1.isoformat(),
+        "limit": 200,
+    }
+    workouts1 = _get("/api/v1/workouts", params=workouts1_params)
+
     workouts2_params: dict[str, Any] = {
         "start_date": start2.isoformat(),
         "end_date": end2.isoformat(),
