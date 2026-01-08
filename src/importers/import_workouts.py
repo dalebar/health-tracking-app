@@ -128,7 +128,7 @@ def main(export_path: Path | None = None) -> ImportResult:
         with get_db_context() as db:
             inserted, skipped = import_records(
                 db=db,
-                user_id=user_id,
+                user_id=user_id,  # type: ignore[arg-type]
                 records=workouts,  # type: ignore[arg-type]
                 model_class=Workout,
                 filter_keys=["start_time"],

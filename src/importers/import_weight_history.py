@@ -92,7 +92,7 @@ def main(export_path: Path | None = None) -> ImportResult:
 
             inserted_count, skipped_count = import_records(
                 db=db,
-                user_id=user_id,
+                user_id=user_id,  # type: ignore[arg-type]
                 records=weight_records,  # type: ignore[arg-type]
                 model_class=BodyMetric,
                 filter_keys=["metric_type", "recorded_at"],

@@ -82,7 +82,7 @@ def main(export_path: Path | None = None) -> ImportResult:
         with get_db_context() as db:
             inserted, skipped = import_records(
                 db=db,
-                user_id=user_id,
+                user_id=user_id,  # type: ignore[arg-type]
                 records=vo2_records,  # type: ignore[arg-type]
                 model_class=CardioFitness,
                 filter_keys=["recorded_at"],
