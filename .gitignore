@@ -47,3 +47,6 @@ logs/
 
 #
 health_tracking_app.egg-info
+
+# MCP
+.mcp.json

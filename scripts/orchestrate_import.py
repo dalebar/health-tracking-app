@@ -16,7 +16,7 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
-from typing import TypedDict, Any
+from typing import TypedDict
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -81,89 +81,24 @@ def extract_export_zip(zip_path: Path) -> Path:
 
 def run_import_scripts(export_xml_path: Path) -> list[ImportResult]:
     """
-    Run all import scripts in sequence.
+    Run all import scripts using unified single-pass parsing.
+
+    OPTIMIZATION: Instead of running 9 separate scripts that each parse
+    the XML file independently (434s total), this uses a unified importer
+    that parses XML once and imports all metrics (target: 60-90s).
 
     Args:
         export_xml_path: Path to extracted export.xml
 
     Returns:
-        List of ImportResult from each script
-
-    Note:
-        Scripts are run in dependency order:
-        1. insert_initial_data (must run first - creates user)
-        2. All other imports (order doesn't matter after user exists)
+        List of ImportResult from each metric import
     """
-    results: list[ImportResult] = []
+    # Use unified single-pass import for massive performance improvement
+    from scripts.import_all_data_unified import import_all_metrics
 
-    # Import script modules
-    import scripts.insert_initial_data as insert_initial
-    import scripts.import_weight_history as weight
-    import scripts.import_steps_history as steps
-    import scripts.import_activity_metrics as activity
-    import scripts.import_resting_energy as resting
-    import scripts.import_heart_rate_metrics as heart
-    import scripts.import_vo2_max as vo2
-    import scripts.import_sleep_data as sleep_data
-    import scripts.import_workouts as workouts
+    results, parse_duration = import_all_metrics(export_xml_path)
 
-    # Script execution order: user creation first, then all imports
-    scripts: list[tuple[str, Any, bool]] = [
-        ("insert_initial_data", insert_initial.main, False),  # No export_path needed
-        ("import_weight_history", weight.main, True),
-        ("import_steps_history", steps.main, True),
-        ("import_activity_metrics", activity.main, True),
-        ("import_resting_energy", resting.main, True),
-        ("import_heart_rate_metrics", heart.main, True),
-        ("import_vo2_max", vo2.main, True),
-        ("import_sleep_data", sleep_data.main, True),
-        ("import_workouts", workouts.main, True),
-    ]
-
-    for script_name, script_func, needs_path in scripts:
-        print(f"\n{'='*70}")
-        print(f"Running: {script_name}")
-        print(f"{'='*70}\n")
-
-        try:
-            if needs_path:
-                result = script_func(export_path=export_xml_path)
-            else:
-                result = script_func()
-
-            results.append(result)
-
-            status = "✅ SUCCESS" if result["success"] else "❌ FAILED"
-            print(f"\n{status}: {script_name}")
-            print(f"  Inserted: {result['inserted_count']}")
-            print(f"  Skipped: {result['skipped_count']}")
-            print(f"  Duration: {result['duration_seconds']:.2f}s")
-
-            if not result["success"]:
-                print(f"  Error: {result['error_message']}")
-
-            # Show per-metric breakdown for multi-metric scripts
-            if result.get("metrics"):
-                print("  Metrics breakdown:")
-                for metric in result["metrics"]:
-                    print(
-                        f"    - {metric['name']}: "
-                        f"+{metric['inserted']} ~{metric['skipped']}"
-                    )
-
-        except Exception as e:
-            # Catch any unexpected errors
-            error_result: ImportResult = {
-                "script_name": script_name,
-                "success": False,
-                "inserted_count": 0,
-                "skipped_count": 0,
-                "duration_seconds": 0.0,
-                "error_message": f"Unexpected error: {str(e)}",
-                "metrics": [],
-            }
-            results.append(error_result)
-            print(f"\n❌ FAILED: {script_name} - {str(e)}")
+    print(f"\n📊 XML parsing completed in {parse_duration:.1f}s (single pass)")
 
     return results
 
