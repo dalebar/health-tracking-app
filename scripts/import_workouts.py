@@ -3,6 +3,7 @@
 Import workout sessions from Apple Health.
 """
 
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -10,161 +11,191 @@ from src.db.models import User, Workout
 from src.db.session import get_db_context
 from src.parsers.apple_health_parser import AppleHealthParser
 from src.utils.import_helpers import (
+    ImportResult,
+    create_import_result,
     import_records,
     display_import_summary,
     display_section_header,
 )
 
 
-def main():
-    """Import workouts from Apple Health export."""
+def main(export_path: Path | None = None) -> ImportResult:
+    """
+    Import workouts from Apple Health export.
 
-    display_section_header("Apple Health Workouts Import")
+    Args:
+        export_path: Path to export.xml file. If None, uses default path.
 
-    export_path = Path(
-        "/Users/daleb/Documents/health/apple_health_export_2026/apple_health_export/export.xml"
-    )
+    Returns:
+        ImportResult with import statistics and status.
+    """
+    start_time = time.time()
 
-    if not export_path.exists():
-        print(f"❌ Export file not found: {export_path}")
-        return
+    try:
+        display_section_header("Apple Health Workouts Import")
 
-    parser = AppleHealthParser()
+        # Default path for backward compatibility (CLI usage)
+        if export_path is None:
+            export_path = Path(
+                "/Users/daleb/Documents/health/apple_health_export_2026/apple_health_export/export.xml"
+            )
 
-    with get_db_context() as db:
-        user = db.query(User).first()
-        if not user:
-            print("❌ No user found")
-            return
-        user_id = user.id
+        if not export_path.exists():
+            return create_import_result(
+                script_name="import_workouts",
+                success=False,
+                error_message=f"Export file not found: {export_path}",
+                duration_seconds=time.time() - start_time,
+            )
 
-    # Parse workouts
-    print("⏳ Parsing workout sessions (this may take 60-90 seconds)...")
-    workouts_raw = parser.parse_workouts_from_file(export_path)
-    print(f"✅ Found {len(workouts_raw)} workout sessions")
+        parser = AppleHealthParser()
 
-    # DE-DUPLICATE by start_time (keep the one with most data)
-    print("🔍 Checking for duplicates...")
-    seen_times = {}
-    workouts = []
+        with get_db_context() as db:
+            user = db.query(User).first()
+            if not user:
+                return create_import_result(
+                    script_name="import_workouts",
+                    success=False,
+                    error_message="No user found. Run insert_initial_data.py first.",
+                    duration_seconds=time.time() - start_time,
+                )
+            user_id = user.id
 
-    for workout in workouts_raw:
-        start_time = workout["start_time"]
+        # Parse workouts
+        print("⏳ Parsing workout sessions (this may take 60-90 seconds)...")
+        workouts_raw = parser.parse_workouts_from_file(export_path)
+        print(f"✅ Found {len(workouts_raw)} workout sessions")
 
-        if start_time not in seen_times:
-            # First occurrence
-            seen_times[start_time] = workout
-            workouts.append(workout)
-        else:
-            # Duplicate found - keep the one with more data
-            existing = seen_times[start_time]
+        if not workouts_raw:
+            return create_import_result(
+                script_name="import_workouts",
+                success=True,
+                inserted_count=0,
+                skipped_count=0,
+                duration_seconds=time.time() - start_time,
+                error_message="No workout sessions found in export",
+            )
 
-            # Count non-None fields
-            existing_fields = sum(1 for v in existing.values() if v is not None)
-            new_fields = sum(1 for v in workout.values() if v is not None)
+        # DE-DUPLICATE by start_time (keep the one with most data)
+        print("🔍 Checking for duplicates...")
+        seen_times = {}
+        workouts = []
 
-            if new_fields > existing_fields:
-                # New one has more data - replace it
-                workouts.remove(existing)
+        for workout in workouts_raw:
+            start_time_value = workout["start_time"]
+
+            if start_time_value not in seen_times:
+                # First occurrence
+                seen_times[start_time_value] = workout
                 workouts.append(workout)
-                seen_times[start_time] = workout
+            else:
+                # Duplicate found - keep the one with more data
+                existing = seen_times[start_time_value]
 
-    duplicates_removed = len(workouts_raw) - len(workouts)
+                # Count non-None fields
+                existing_fields = sum(1 for v in existing.values() if v is not None)
+                new_fields = sum(1 for v in workout.values() if v is not None)
 
-    if duplicates_removed > 0:
-        print(
-            f"⚠️  Removed {duplicates_removed} duplicate workouts (kept most complete records)"
-        )
-    else:
-        print("✅ No duplicates found")
+                if new_fields > existing_fields:
+                    # New one has more data - replace it
+                    workouts.remove(existing)
+                    workouts.append(workout)
+                    seen_times[start_time_value] = workout
 
-    print(f"📊 Final workout count: {len(workouts)}")
-    print()
+        duplicates_removed = len(workouts_raw) - len(workouts)
 
-    if not workouts:
-        print("No workouts found in export.")
-        return
+        if duplicates_removed > 0:
+            print(
+                f"⚠️  Removed {duplicates_removed} duplicate workouts (kept most complete records)"
+            )
+        else:
+            print("✅ No duplicates found")
 
-    # Display date range
-    oldest = workouts[0].get("start_time")
-    newest = workouts[-1].get("end_time")
-    if not oldest or not newest:
-        print("❌ Missing start_time or end_time in workout data")
-        return
-    print(
-        f"📅 Date range: {oldest.strftime('%Y-%m-%d')} to {newest.strftime('%Y-%m-%d')}"
-    )
-    print()
-
-    # Show workout type breakdown
-    workout_types = Counter(w["workout_type"] for w in workouts)
-    print("Workout Types:")
-    for wtype, count in workout_types.most_common():
-        print(f"  🏃 {wtype}: {count}")
-    print()
-
-    # Import to database
-    print("💾 Importing to database...")
-
-    with get_db_context() as db:
-        inserted, skipped = import_records(
-            db=db,
-            user_id=user_id,
-            records=workouts,
-            model_class=Workout,
-            filter_keys=["start_time"],
-            batch_size=50,
-            metric_name="Workouts",
-        )
-        display_import_summary("Workouts", inserted, skipped)
         print()
 
-    # Display summary
-    print("=" * 70)
-    print("RECENT WORKOUTS SUMMARY")
-    print("=" * 70)
+        # Display date range
+        if workouts:
+            oldest = workouts[0]["start_time"]
+            newest = workouts[-1]["end_time"]
+            print(
+                f"📅 Date range: {oldest.strftime('%Y-%m-%d')} to {newest.strftime('%Y-%m-%d')}"
+            )
+            print()
 
-    with get_db_context() as db:
-        user = db.query(User).first()
-        if not user:
-            return
+        # Import to database
+        print("💾 Importing to database...")
 
-        recent_workouts = (
-            db.query(Workout)
-            .filter(Workout.user_id == user.id)
-            .order_by(Workout.start_time.desc())
-            .limit(10)
-            .all()
-        )
+        with get_db_context() as db:
+            inserted, skipped = import_records(
+                db=db,
+                user_id=user_id,
+                records=workouts,
+                model_class=Workout,
+                filter_keys=["start_time"],
+                batch_size=50,
+                metric_name="Workouts",
+            )
+            display_import_summary("Workouts", inserted, skipped)
 
-        print("Last 10 workouts:")
-        for workout in recent_workouts:
-            duration_hours = float(workout.duration_minutes) / 60
+        print()
+        print("=" * 70)
+        print("WORKOUT BREAKDOWN BY TYPE")
+        print("=" * 70)
 
-            parts = [
-                f"  {workout.start_time.strftime('%Y-%m-%d')}:",
-                f"{workout.workout_type}",
-                f"{duration_hours:.1f}h",
-            ]
+        # Count workout types
+        workout_types = Counter(w["workout_type"] for w in workouts)
 
-            if workout.total_energy_kcal:
-                parts.append(f"{workout.total_energy_kcal:.0f} kcal")
+        for workout_type, count in workout_types.most_common():
+            print(f"  🏃 {workout_type}: {count} sessions")
 
-            if workout.avg_heart_rate_bpm:
-                parts.append(
-                    f"HR avg {workout.avg_heart_rate_bpm} "
-                    f"(max {workout.max_heart_rate_bpm})"
+        print()
+        print("=" * 70)
+        print("RECENT WORKOUTS")
+        print("=" * 70)
+
+        with get_db_context() as db:
+            user = db.query(User).first()
+            if user:
+                recent = (
+                    db.query(Workout)
+                    .filter(Workout.user_id == user.id)
+                    .order_by(Workout.start_time.desc())
+                    .limit(10)
+                    .all()
                 )
 
-            if workout.distance_km:
-                parts.append(f"{workout.distance_km:.1f} km")
+                print("Last 10 workouts:")
+                for workout in recent:
+                    print(
+                        f"  🏋️  {workout.start_time.strftime('%Y-%m-%d')}: "
+                        f"{workout.workout_type} - {workout.duration_minutes} min, "
+                        f"{workout.total_energy_kcal} kcal"
+                    )
 
-            print(" | ".join(parts))
+        print("=" * 70)
+        print()
+        print("✅ Workouts imported successfully!")
+        print("🏋️  Your training history is now tracked")
 
-    print("=" * 70)
-    print()
-    print("✅ Workouts imported successfully!")
-    print("🥊 Your training history is now tracked")
+        # Return success
+        duration = time.time() - start_time
+        return create_import_result(
+            script_name="import_workouts",
+            success=True,
+            inserted_count=inserted,
+            skipped_count=skipped,
+            duration_seconds=duration,
+        )
+
+    except Exception as e:
+        duration = time.time() - start_time
+        print(f"\n❌ Error: {str(e)}")
+        return create_import_result(
+            script_name="import_workouts",
+            success=False,
+            error_message=str(e),
+            duration_seconds=duration,
+        )
 
 
 if __name__ == "__main__":

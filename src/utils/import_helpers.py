@@ -4,11 +4,23 @@ Utility functions for importing health metrics to database.
 Provides reusable import logic to reduce code duplication across import scripts.
 """
 
-from typing import TypeVar, Any
+from typing import TypeVar, Any, TypedDict
 from sqlalchemy.orm import Session
 from src.db.models import Base
 
 T = TypeVar("T", bound=Base)
+
+
+class ImportResult(TypedDict):
+    """Result from running an import script."""
+
+    script_name: str  # e.g., "import_weight_history"
+    success: bool  # Overall success flag
+    inserted_count: int  # Total records inserted
+    skipped_count: int  # Total records skipped
+    duration_seconds: float  # Execution time
+    error_message: str | None  # Error details if failed
+    metrics: list[dict[str, Any]]  # For scripts that import multiple metrics
 
 
 def import_records(
@@ -79,3 +91,41 @@ def display_section_header(title: str, width: int = 70) -> None:
     print(title)
     print("=" * width)
     print()
+
+
+def create_import_result(
+    script_name: str,
+    success: bool,
+    inserted_count: int = 0,
+    skipped_count: int = 0,
+    duration_seconds: float = 0.0,
+    error_message: str | None = None,
+    metrics: list[dict[str, Any]] | None = None,
+) -> ImportResult:
+    """
+    Create a standardized ImportResult dictionary.
+
+    Reduces boilerplate in import scripts by providing a consistent
+    way to create result objects.
+
+    Args:
+        script_name: Name of the import script (e.g., "import_weight_history")
+        success: Whether the import succeeded
+        inserted_count: Number of new records inserted
+        skipped_count: Number of duplicate records skipped
+        duration_seconds: Time taken to run the import
+        error_message: Error details if import failed
+        metrics: List of per-metric breakdowns for multi-metric scripts
+
+    Returns:
+        ImportResult dictionary with all fields populated
+    """
+    return {
+        "script_name": script_name,
+        "success": success,
+        "inserted_count": inserted_count,
+        "skipped_count": skipped_count,
+        "duration_seconds": duration_seconds,
+        "error_message": error_message,
+        "metrics": metrics or [],
+    }

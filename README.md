@@ -231,6 +231,94 @@ The Health Tracking app includes an MCP (Model Context Protocol) server that ena
 
 See `src/mcp/README.md` for complete documentation.
 
+## Auto-Import System (Phase 5A)
+
+The Health Tracking app includes an automated import system that watches for Apple Health exports and automatically processes them when detected.
+
+### Quick Start
+
+**Option 1: Automatic Watcher (Recommended)**
+
+1. **Install the watcher service:**
+   ```bash
+   ./scripts/install_watcher.sh
+   ```
+
+2. **Export from Apple Health:**
+   - Open Health app on iPhone/iPad
+   - Tap your profile → Export All Health Data
+   - Save and AirDrop/share `export.zip` to Mac
+
+3. **Drop the file:**
+   - Move `export.zip` to `/Users/daleb/Documents/health/`
+   - Auto-import will start within 30 seconds
+   - You'll receive a macOS notification when complete
+
+**Option 2: Manual Import**
+
+```bash
+python scripts/run_import.py ~/Documents/health/export.zip
+```
+
+### Features
+
+- ✅ **Automatic Detection** - Watches folder for new export.zip files
+- ✅ **Smart Import** - Runs all 9 import scripts in sequence
+- ✅ **Duplicate Prevention** - Skips records that already exist
+- ✅ **macOS Notifications** - Success/failure alerts
+- ✅ **Comprehensive Logging** - Full history in `logs/import_history.log`
+- ✅ **Auto-Restart** - Watcher restarts if it crashes
+- ✅ **Background Service** - Runs on login via LaunchAgent
+
+### Management Commands
+
+```bash
+# Stop the watcher
+launchctl unload ~/Library/LaunchAgents/com.daleb.health-import-watcher.plist
+
+# Start the watcher
+launchctl load ~/Library/LaunchAgents/com.daleb.health-import-watcher.plist
+
+# Check status
+launchctl list | grep health-import-watcher
+
+# View logs
+tail -f logs/import_history.log
+
+# Uninstall
+./scripts/uninstall_watcher.sh
+```
+
+### Architecture
+
+- **Watcher** (`scripts/watch_health_exports.py`) - Monitors folder for files
+- **Orchestrator** (`scripts/orchestrate_import.py`) - Coordinates all imports
+- **Import Scripts** (9 total) - Parse and import specific metrics:
+  - Weight history
+  - Steps and activity metrics
+  - Resting energy (BMR)
+  - Heart rate metrics (resting, walking, HRV)
+  - VO2 max (cardio fitness)
+  - Sleep sessions
+  - Workouts
+- **Notifications** (`scripts/notification_helper.py`) - macOS alerts
+
+### Troubleshooting
+
+**Watcher not starting?**
+- Check logs: `tail -f logs/watcher_stdout.log`
+- Verify Python path in plist file
+- Ensure watchdog is installed: `uv pip list | grep watchdog`
+
+**Import failing?**
+- Verify database connection in `.env`
+- Check that FastAPI server is NOT required (imports work standalone)
+- Review detailed logs in `logs/import_history.log`
+
+**No notification appearing?**
+- Grant Terminal/Python notification permissions in System Settings
+- Test manually: `python scripts/notification_helper.py`
+
 ## Future Enhancements
 
 - Automated data sync (iOS Shortcuts + Mac app)
