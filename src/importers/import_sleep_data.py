@@ -58,7 +58,7 @@ def main(export_path: Path | None = None) -> ImportResult:
                     error_message="No user found. Run insert_initial_data.py first.",
                     duration_seconds=time.time() - start_time,
                 )
-            user_id = user.id
+            user_id = int(user.id)  # type: ignore[arg-type]
 
         # Parse sleep sessions
         print("⏳ Parsing sleep sessions (this may take 60-90 seconds)...")
@@ -91,7 +91,7 @@ def main(export_path: Path | None = None) -> ImportResult:
             inserted, skipped = import_records(
                 db=db,
                 user_id=user_id,
-                records=sleep_sessions,
+                records=sleep_sessions,  # type: ignore[arg-type]
                 model_class=SleepSession,
                 filter_keys=["start_time"],
                 batch_size=50,

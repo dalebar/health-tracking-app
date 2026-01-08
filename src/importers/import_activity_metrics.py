@@ -74,7 +74,7 @@ def main(export_path: Path | None = None) -> ImportResult:
                     error_message="No user found. Run insert_initial_data.py first.",
                     duration_seconds=time.time() - start_time,
                 )
-            user_id = user.id
+            user_id = int(user.id)  # type: ignore[arg-type]
 
         # Parse Active Energy
         print("⏳ Parsing active energy (1.1M+ records)...")
@@ -95,7 +95,7 @@ def main(export_path: Path | None = None) -> ImportResult:
             inserted_e, skipped_e = import_records(
                 db=db,
                 user_id=user_id,
-                records=energy_records,
+                records=energy_records,  # type: ignore[arg-type]
                 model_class=ActivityMetric,
                 filter_keys=["metric_type", "date"],
                 metric_name="Active Energy",
@@ -106,7 +106,7 @@ def main(export_path: Path | None = None) -> ImportResult:
             inserted_ex, skipped_ex = import_records(
                 db=db,
                 user_id=user_id,
-                records=exercise_records,
+                records=exercise_records,  # type: ignore[arg-type]
                 model_class=ActivityMetric,
                 filter_keys=["metric_type", "date"],
                 metric_name="Exercise Minutes",
@@ -136,7 +136,7 @@ def main(export_path: Path | None = None) -> ImportResult:
                 )
 
                 # Group by date
-                by_date: dict[date, MetricsByDay] = defaultdict(dict)
+                by_date: dict[date, MetricsByDay] = defaultdict(dict)  # type: ignore[arg-type]
                 for metric in recent_metrics:
                     by_date[metric.date][metric.metric_type] = metric.value  # type: ignore
 

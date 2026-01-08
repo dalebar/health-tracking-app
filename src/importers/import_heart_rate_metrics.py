@@ -63,7 +63,7 @@ def main(export_path: Path | None = None) -> ImportResult:
                     error_message="No user found. Run insert_initial_data.py first.",
                     duration_seconds=time.time() - start_time,
                 )
-            user_id = user.id
+            user_id = int(user.id)  # type: ignore[arg-type]
 
         # Parse Resting Heart Rate
         print("⏳ Parsing resting heart rate (990 records)...")
@@ -89,7 +89,7 @@ def main(export_path: Path | None = None) -> ImportResult:
             inserted_r, skipped_r = import_records(
                 db=db,
                 user_id=user_id,
-                records=resting_hr_records,
+                records=resting_hr_records,  # type: ignore[arg-type]
                 model_class=HeartRateMetric,
                 filter_keys=["metric_type", "date"],
                 metric_name="Resting HR",
@@ -100,7 +100,7 @@ def main(export_path: Path | None = None) -> ImportResult:
             inserted_w, skipped_w = import_records(
                 db=db,
                 user_id=user_id,
-                records=walking_hr_records,
+                records=walking_hr_records,  # type: ignore[arg-type]
                 model_class=HeartRateMetric,
                 filter_keys=["metric_type", "date"],
                 metric_name="Walking HR",
@@ -111,7 +111,7 @@ def main(export_path: Path | None = None) -> ImportResult:
             inserted_h, skipped_h = import_records(
                 db=db,
                 user_id=user_id,
-                records=hrv_records,
+                records=hrv_records,  # type: ignore[arg-type]
                 model_class=HeartRateMetric,
                 filter_keys=["metric_type", "date"],
                 metric_name="HRV",

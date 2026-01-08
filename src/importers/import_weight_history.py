@@ -88,12 +88,12 @@ def main(export_path: Path | None = None) -> ImportResult:
                     duration_seconds=time.time() - start_time,
                 )
 
-            user_id = user.id  # Store ID before session closes
+            user_id = int(user.id)  # type: ignore[arg-type]
 
             inserted_count, skipped_count = import_records(
                 db=db,
                 user_id=user_id,
-                records=weight_records,
+                records=weight_records,  # type: ignore[arg-type]
                 model_class=BodyMetric,
                 filter_keys=["metric_type", "recorded_at"],
                 metric_name="Weight",

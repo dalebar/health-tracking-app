@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Import VO2 max (cardio fitness) records from Apple Health.
+Import resting energy (basal metabolic rate) from Apple Health.
 """
 
 import time
 from pathlib import Path
 
-from src.db.models import User, CardioFitness
+from src.db.models import User, ActivityMetric
 from src.db.session import get_db_context
 from src.parsers.apple_health_parser import AppleHealthParser
 from src.utils.import_helpers import (
@@ -20,7 +20,7 @@ from src.utils.import_helpers import (
 
 def main(export_path: Path | None = None) -> ImportResult:
     """
-    Import VO2 max measurements from Apple Health export.
+    Import resting energy from Apple Health export.
 
     Args:
         export_path: Path to export.xml file. If None, uses default path.
@@ -31,7 +31,7 @@ def main(export_path: Path | None = None) -> ImportResult:
     start_time = time.time()
 
     try:
-        display_section_header("Apple Health VO2 Max Import")
+        display_section_header("Apple Health Resting Energy Import")
 
         # Default path for backward compatibility (CLI usage)
         if export_path is None:
@@ -41,7 +41,7 @@ def main(export_path: Path | None = None) -> ImportResult:
 
         if not export_path.exists():
             return create_import_result(
-                script_name="import_vo2_max",
+                script_name="import_resting_energy",
                 success=False,
                 error_message=f"Export file not found: {export_path}",
                 duration_seconds=time.time() - start_time,
@@ -53,27 +53,28 @@ def main(export_path: Path | None = None) -> ImportResult:
             user = db.query(User).first()
             if not user:
                 return create_import_result(
-                    script_name="import_vo2_max",
+                    script_name="import_resting_energy",
                     success=False,
                     error_message="No user found. Run insert_initial_data.py first.",
                     duration_seconds=time.time() - start_time,
                 )
-            user_id = user.id
+            user_id = int(user.id)  # type: ignore[arg-type]
 
-        # Parse VO2 max records
-        print("⏳ Parsing VO2 max records (221 records)...")
-        vo2_records = parser.parse_vo2_max_from_file(export_path)
-        print(f"✅ Found {len(vo2_records)} VO2 max measurements")
+        # Parse Resting Energy
+        print("⏳ Parsing resting energy (1.1M+ records → daily totals)...")
+        print("   This may take 60-90 seconds...")
+        resting_records = parser.parse_resting_energy_from_file(export_path)
+        print(f"✅ Aggregated to {len(resting_records)} daily totals")
         print()
 
-        if not vo2_records:
+        if not resting_records:
             return create_import_result(
-                script_name="import_vo2_max",
+                script_name="import_resting_energy",
                 success=True,
                 inserted_count=0,
                 skipped_count=0,
                 duration_seconds=time.time() - start_time,
-                error_message="No VO2 max records found in export",
+                error_message="No resting energy records found in export",
             )
 
         # Import to database
@@ -83,59 +84,48 @@ def main(export_path: Path | None = None) -> ImportResult:
             inserted, skipped = import_records(
                 db=db,
                 user_id=user_id,
-                records=vo2_records,
-                model_class=CardioFitness,
-                filter_keys=["recorded_at"],
-                batch_size=50,
-                metric_name="VO2 max",
+                records=resting_records,  # type: ignore[arg-type]
+                model_class=ActivityMetric,
+                filter_keys=["metric_type", "date"],
+                metric_name="Resting Energy",
             )
-            display_import_summary("VO2 max", inserted, skipped)
+            display_import_summary("Resting Energy", inserted, skipped)
 
         print()
         print("=" * 70)
-        print("CARDIO FITNESS TREND")
+        print("RECENT RESTING ENERGY")
         print("=" * 70)
 
         with get_db_context() as db:
             user = db.query(User).first()
             if user:
-                all_vo2 = (
-                    db.query(CardioFitness)
-                    .filter(CardioFitness.user_id == user.id)
-                    .order_by(CardioFitness.recorded_at)
+                recent = (
+                    db.query(ActivityMetric)
+                    .filter(
+                        ActivityMetric.user_id == user.id,
+                        ActivityMetric.metric_type == "resting_energy",
+                    )
+                    .order_by(ActivityMetric.date.desc())
+                    .limit(10)
                     .all()
                 )
 
-                if len(all_vo2) >= 2:
-                    first = all_vo2[0]
-                    last = all_vo2[-1]
-                    change = float(last.vo2_max) - float(first.vo2_max)
-                    sign = "+" if change > 0 else ""
-
+                print("Last 10 days:")
+                for metric in recent:
                     print(
-                        f"First recorded: {first.recorded_at.strftime('%Y-%m-%d')}: {first.vo2_max} mL/kg/min"
+                        f"  🔥 {metric.date.strftime('%Y-%m-%d')}: "
+                        f"{metric.value:,.0f} kcal (BMR)"
                     )
-                    print(
-                        f"Most recent:    {last.recorded_at.strftime('%Y-%m-%d')}: {last.vo2_max} mL/kg/min"
-                    )
-                    print(f"Total change:   {sign}{change:.1f} mL/kg/min")
-                    print()
-
-                    print("Last 10 measurements:")
-                    for vo2 in all_vo2[-10:]:
-                        print(
-                            f"  💪 {vo2.recorded_at.strftime('%Y-%m-%d')}: {vo2.vo2_max} mL/kg/min"
-                        )
 
         print("=" * 70)
         print()
-        print("✅ VO2 max imported successfully!")
-        print("💪 Your cardio fitness is now tracked")
+        print("✅ Resting energy imported successfully!")
+        print("🔥 Your daily BMR is now tracked for accurate TDEE calculation")
 
         # Return success
         duration = time.time() - start_time
         return create_import_result(
-            script_name="import_vo2_max",
+            script_name="import_resting_energy",
             success=True,
             inserted_count=inserted,
             skipped_count=skipped,
@@ -146,7 +136,7 @@ def main(export_path: Path | None = None) -> ImportResult:
         duration = time.time() - start_time
         print(f"\n❌ Error: {str(e)}")
         return create_import_result(
-            script_name="import_vo2_max",
+            script_name="import_resting_energy",
             success=False,
             error_message=str(e),
             duration_seconds=duration,

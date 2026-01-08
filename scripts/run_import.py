@@ -12,7 +12,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.orchestrate_import import orchestrate_import
+from src.importers.orchestrate_import import orchestrate_import
 
 
 def main():

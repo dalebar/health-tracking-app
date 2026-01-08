@@ -22,14 +22,14 @@ from pathlib import Path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from scripts.orchestrate_import import orchestrate_import
-from scripts.notification_helper import send_notification
+from src.importers.orchestrate_import import orchestrate_import
+from src.watcher.notification_helper import send_notification
 
 # Configure logging
-LOG_FILE = Path(__file__).parent.parent / "logs" / "import_history.log"
+LOG_FILE = Path(__file__).parent.parent.parent / "logs" / "import_history.log"
 LOG_FILE.parent.mkdir(exist_ok=True)
 
 # Setup logging with rotation

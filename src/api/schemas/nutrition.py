@@ -2,7 +2,8 @@
 Pydantic schemas for nutrition API responses.
 """
 
-from datetime import date, time
+from datetime import date
+from datetime import time as time_type
 from decimal import Decimal
 from pydantic import BaseModel
 
@@ -13,7 +14,7 @@ class NutritionEntryResponse(BaseModel):
     id: int
     date: date
     meal: str
-    time: time | None = None
+    time: time_type | None = None
     calories: Decimal | None = None
     protein_g: Decimal | None = None
     carbohydrates_g: Decimal | None = None

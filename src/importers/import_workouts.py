@@ -59,7 +59,7 @@ def main(export_path: Path | None = None) -> ImportResult:
                     error_message="No user found. Run insert_initial_data.py first.",
                     duration_seconds=time.time() - start_time,
                 )
-            user_id = user.id
+            user_id = int(user.id)  # type: ignore[arg-type]
 
         # Parse workouts
         print("⏳ Parsing workout sessions (this may take 60-90 seconds)...")
@@ -129,7 +129,7 @@ def main(export_path: Path | None = None) -> ImportResult:
             inserted, skipped = import_records(
                 db=db,
                 user_id=user_id,
-                records=workouts,
+                records=workouts,  # type: ignore[arg-type]
                 model_class=Workout,
                 filter_keys=["start_time"],
                 batch_size=50,
@@ -167,9 +167,9 @@ def main(export_path: Path | None = None) -> ImportResult:
                 print("Last 10 workouts:")
                 for workout in recent:
                     print(
-                        f"  🏋️  {workout.start_time.strftime('%Y-%m-%d')}: "
-                        f"{workout.workout_type} - {workout.duration_minutes} min, "
-                        f"{workout.total_energy_kcal} kcal"
+                        f"  🏋️  {workout.start_time.strftime('%Y-%m-%d')}: "  # type: ignore[attr-defined]
+                        f"{workout.workout_type} - {workout.duration_minutes} min, "  # type: ignore[attr-defined]
+                        f"{workout.total_energy_kcal} kcal"  # type: ignore[attr-defined]
                     )
 
         print("=" * 70)

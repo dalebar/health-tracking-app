@@ -102,12 +102,12 @@ def main(export_path: Path | None = None) -> ImportResult:
                     duration_seconds=time.time() - start_time,
                 )
 
-            user_id = user.id
+            user_id = int(user.id)  # type: ignore[arg-type]
 
             inserted_count, skipped_count = import_records(
                 db=db,
                 user_id=user_id,
-                records=step_records,
+                records=step_records,  # type: ignore[arg-type]
                 model_class=ActivityMetric,
                 filter_keys=["metric_type", "date"],
                 metric_name="Steps",

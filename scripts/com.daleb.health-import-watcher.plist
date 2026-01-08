@@ -10,7 +10,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/Users/daleb/Documents/projects/health-tracking-app/.venv/bin/python3</string>
-        <string>/Users/daleb/Documents/projects/health-tracking-app/scripts/watch_health_exports.py</string>
+        <string>/Users/daleb/Documents/projects/health-tracking-app/src/watcher/watch_health_exports.py</string>
     </array>
 
     <!-- Working directory -->

@@ -18,8 +18,8 @@ import zipfile
 from pathlib import Path
 from typing import TypedDict
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.utils.import_helpers import ImportResult
 
@@ -94,7 +94,7 @@ def run_import_scripts(export_xml_path: Path) -> list[ImportResult]:
         List of ImportResult from each metric import
     """
     # Use unified single-pass import for massive performance improvement
-    from scripts.import_all_data_unified import import_all_metrics
+    from src.importers.import_all_data_unified import import_all_metrics
 
     results, parse_duration = import_all_metrics(export_xml_path)
 
