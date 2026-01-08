@@ -303,6 +303,104 @@ def get_sleep_summary(days: int = 7) -> Any:
 
 
 # ============================================================================
+# NUTRITION TOOLS
+# ============================================================================
+
+
+@mcp.tool()
+def get_daily_nutrition(nutrition_date: str) -> Any:
+    """
+    Get nutrition summary for a specific date.
+
+    Args:
+        nutrition_date: Date in YYYY-MM-DD format (e.g., "2026-01-08")
+
+    Returns:
+        dict: Calories, protein, carbs, fat, meal breakdown, and goal comparison
+    """
+    return _get(f"/api/v1/nutrition/daily/{nutrition_date}")
+
+
+@mcp.tool()
+def get_meals_for_date(meal_date: str) -> Any:
+    """
+    Get detailed meal breakdown for a specific date.
+
+    Args:
+        meal_date: Date in YYYY-MM-DD format (e.g., "2026-01-08")
+
+    Returns:
+        dict: Individual food entries grouped by meal (Breakfast, Lunch, Dinner, Snacks)
+    """
+    return _get(f"/api/v1/nutrition/meals/{meal_date}")
+
+
+@mcp.tool()
+def get_nutrition_summary(days: int = 7) -> Any:
+    """
+    Get nutrition summary over a date range.
+
+    Args:
+        days: Number of days to summarize (default: 7, max: 90)
+
+    Returns:
+        dict: Average calories, protein, carbs, fat, and goal adherence
+    """
+    return _get("/api/v1/nutrition/summary", params={"days": days})
+
+
+@mcp.tool()
+def get_nutrition_goals() -> Any:
+    """
+    Get current nutrition goals by day of week.
+
+    Returns:
+        dict: Calorie and protein targets for each day of the week
+    """
+    return _get("/api/v1/nutrition/goals")
+
+
+@mcp.tool()
+def get_todays_nutrition_goal() -> Any:
+    """
+    Get today's specific nutrition goal.
+
+    Returns:
+        dict: Today's calorie target, protein target, and macro percentages
+    """
+    return _get("/api/v1/nutrition/goals/today")
+
+
+@mcp.tool()
+def get_nutrition_trends(days: int = 30) -> Any:
+    """
+    Get nutrition trends over time for charting.
+
+    Args:
+        days: Number of days for trends (default: 30, min: 7, max: 90)
+
+    Returns:
+        dict: Daily nutrition data with averages and goal adherence
+    """
+    return _get("/api/v1/nutrition/trends", params={"days": days})
+
+
+@mcp.tool()
+def get_calorie_deficit(days: int = 7) -> Any:
+    """
+    Calculate calorie deficit using TDEE from activity data.
+    TDEE (Total Daily Energy Expenditure) - Calories consumed = Deficit
+
+    Args:
+        days: Number of days to analyze (default: 7, max: 30)
+
+    Returns:
+        dict: Daily breakdown of TDEE, intake, and deficit with totals
+    """
+    return _get("/api/v1/nutrition/deficit", params={"days": days})
+
+
+# ============================================================================
 # CONVENIENCE/ANALYSIS TOOLS
 # ============================================================================
 
@@ -347,12 +445,20 @@ def get_weekly_summary() -> Any:
     }
     workout_stats = _get("/api/v1/workouts/stats/by-type", params=stats_params)
 
+    # Get nutrition summary
+    nutrition = _get("/api/v1/nutrition/summary", params={"days": 7})
+
+    # Get calorie deficit
+    deficit = _get("/api/v1/nutrition/deficit", params={"days": 7})
+
     return {
         "weight": weight,
         "activity": activity,
         "sleep": sleep,
         "workouts": workouts,
         "workout_stats": workout_stats,
+        "nutrition": nutrition,
+        "calorie_deficit": deficit,
     }
 
 

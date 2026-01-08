@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """
-Watch for Apple Health export files and trigger automatic import.
+Watch for health export files and trigger automatic import.
 
 Monitors: /Users/daleb/Documents/health/
-Target file: export.zip
-Triggers: orchestrate_import.py when file is detected and stable
+Target files:
+  - export.zip (Apple Health)
+  - File-Export-*.zip (MyFitnessPal nutrition data)
+
+Triggers appropriate importer when file is detected and stable.
 """
 
 import logging
+import shutil
 import sys
+import tempfile
 import time
+import zipfile
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -48,15 +54,26 @@ logger.addHandler(console_handler)
 
 
 class HealthExportHandler(FileSystemEventHandler):
-    """Handle file system events for Apple Health exports."""
+    """Handle file system events for health exports (Apple Health + MyFitnessPal)."""
 
-    def __init__(self, watch_dir: Path, target_filename: str = "export.zip"):
+    def __init__(self, watch_dir: Path):
         super().__init__()
         self.watch_dir = watch_dir
-        self.target_filename = target_filename
         self.last_modified: dict[Path, float] = {}  # Track file modification times
         self.debounce_seconds = 5  # Wait 5s after last modification
         self.import_in_progress = False  # Prevent concurrent imports
+
+    def _is_apple_health_export(self, filename: str) -> bool:
+        """Check if file is an Apple Health export."""
+        return filename == "export.zip"
+
+    def _is_mfp_export(self, filename: str) -> bool:
+        """Check if file is a MyFitnessPal export."""
+        return filename.startswith("File-Export-") and filename.endswith(".zip")
+
+    def _is_target_file(self, filename: str) -> bool:
+        """Check if file should trigger an import."""
+        return self._is_apple_health_export(filename) or self._is_mfp_export(filename)
 
     def on_created(self, event):
         """Handle file creation events."""
@@ -65,7 +82,7 @@ class HealthExportHandler(FileSystemEventHandler):
 
         file_path = Path(event.src_path)
 
-        if file_path.name == self.target_filename:
+        if self._is_target_file(file_path.name):
             logger.info(f"Detected new file: {file_path}")
             self._schedule_import(file_path)
 
@@ -76,7 +93,7 @@ class HealthExportHandler(FileSystemEventHandler):
 
         file_path = Path(event.src_path)
 
-        if file_path.name == self.target_filename:
+        if self._is_target_file(file_path.name):
             logger.info(f"Detected modification: {file_path}")
             self._schedule_import(file_path)
 
@@ -103,9 +120,9 @@ class HealthExportHandler(FileSystemEventHandler):
 
     def _trigger_import(self, zip_path: Path):
         """
-        Trigger the import orchestration.
+        Trigger the appropriate import based on file type.
 
-        Runs orchestrate_import, logs results, sends notification.
+        Routes to Apple Health orchestrator or MyFitnessPal importer.
         """
         if self.import_in_progress:
             logger.warning("Import already in progress, skipping")
@@ -122,53 +139,14 @@ class HealthExportHandler(FileSystemEventHandler):
             logger.info(f"Starting import for: {zip_path}")
             logger.info(f"File size: {zip_path.stat().st_size / (1024**2):.1f} MB")
 
-            # Run orchestration
-            result = orchestrate_import(zip_path)
-
-            # Log results
-            logger.info(f"Import completed - Success: {result['success']}")
-            logger.info(f"Scripts run: {result['scripts_run']}")
-            logger.info(f"Succeeded: {result['scripts_succeeded']}")
-            logger.info(f"Failed: {result['scripts_failed']}")
-            logger.info(f"Inserted: {result['total_inserted']}")
-            logger.info(f"Skipped: {result['total_skipped']}")
-            logger.info(f"Duration: {result['total_duration_seconds']:.1f}s")
-
-            # Log individual script results
-            for script_result in result["results"]:
-                status = "OK" if script_result["success"] else "FAIL"
-                logger.info(
-                    f"  [{status}] {script_result['script_name']}: "
-                    f"+{script_result['inserted_count']} "
-                    f"~{script_result['skipped_count']} "
-                    f"({script_result['duration_seconds']:.1f}s)"
-                )
-                if not script_result["success"]:
-                    logger.error(f"    Error: {script_result['error_message']}")
-
-            # Send notification
-            if result["success"]:
-                send_notification(
-                    title="✅ Health Import Complete",
-                    message=(
-                        f"Successfully imported {result['total_inserted']:,} records "
-                        f"({result['scripts_succeeded']}/{result['scripts_run']} scripts). "
-                        f"Took {result['total_duration_seconds']:.0f}s."
-                    ),
-                    sound="Glass",
-                )
-            else:
-                send_notification(
-                    title="❌ Health Import Failed",
-                    message=(
-                        f"{result['scripts_failed']} script(s) failed. "
-                        f"Check logs at {LOG_FILE}"
-                    ),
-                    sound="Basso",
-                )
+            # Route to appropriate importer
+            if self._is_apple_health_export(zip_path.name):
+                self._import_apple_health(zip_path)
+            elif self._is_mfp_export(zip_path.name):
+                self._import_mfp(zip_path)
 
         except Exception as e:
-            logger.error(f"Import orchestration failed: {e}", exc_info=True)
+            logger.error(f"Import failed: {e}", exc_info=True)
             send_notification(
                 title="❌ Health Import Error",
                 message=f"Import failed: {str(e)}. Check logs at {LOG_FILE}",
@@ -177,6 +155,117 @@ class HealthExportHandler(FileSystemEventHandler):
 
         finally:
             self.import_in_progress = False
+
+    def _import_apple_health(self, zip_path: Path):
+        """Import Apple Health export.zip using orchestrator."""
+        result = orchestrate_import(zip_path)
+
+        # Log results
+        logger.info(f"Import completed - Success: {result['success']}")
+        logger.info(f"Scripts run: {result['scripts_run']}")
+        logger.info(f"Succeeded: {result['scripts_succeeded']}")
+        logger.info(f"Failed: {result['scripts_failed']}")
+        logger.info(f"Inserted: {result['total_inserted']}")
+        logger.info(f"Skipped: {result['total_skipped']}")
+        logger.info(f"Duration: {result['total_duration_seconds']:.1f}s")
+
+        # Log individual script results
+        for script_result in result["results"]:
+            status = "OK" if script_result["success"] else "FAIL"
+            logger.info(
+                f"  [{status}] {script_result['script_name']}: "
+                f"+{script_result['inserted_count']} "
+                f"~{script_result['skipped_count']} "
+                f"({script_result['duration_seconds']:.1f}s)"
+            )
+            if not script_result["success"]:
+                logger.error(f"    Error: {script_result['error_message']}")
+
+        # Send notification
+        if result["success"]:
+            send_notification(
+                title="✅ Health Import Complete",
+                message=(
+                    f"Successfully imported {result['total_inserted']:,} records "
+                    f"({result['scripts_succeeded']}/{result['scripts_run']} scripts). "
+                    f"Took {result['total_duration_seconds']:.0f}s."
+                ),
+                sound="Glass",
+            )
+        else:
+            send_notification(
+                title="❌ Health Import Failed",
+                message=(
+                    f"{result['scripts_failed']} script(s) failed. "
+                    f"Check logs at {LOG_FILE}"
+                ),
+                sound="Basso",
+            )
+
+    def _import_mfp(self, zip_path: Path):
+        """Import MyFitnessPal nutrition export."""
+        from src.importers.myfitnesspal_importer import MyFitnessPalImporter
+        from src.db.session import get_db_context
+
+        temp_dir = None
+        try:
+            # Extract zip to temp directory
+            temp_dir = Path(tempfile.mkdtemp(prefix="mfp_import_"))
+            logger.info(f"Extracting MFP export to: {temp_dir}")
+
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+
+            # Find Nutrition-Summary CSV file
+            nutrition_files = list(temp_dir.rglob("Nutrition-Summary*.csv"))
+
+            if not nutrition_files:
+                raise ValueError("No Nutrition-Summary CSV found in zip")
+
+            csv_path = nutrition_files[0]
+            logger.info(f"Found nutrition file: {csv_path.name}")
+
+            # Import using MyFitnessPalImporter
+            start_time = time.time()
+            with get_db_context() as db:
+                importer = MyFitnessPalImporter(db)
+                stats = importer.import_file(csv_path)
+
+            duration = time.time() - start_time
+
+            # Log results
+            logger.info(f"MFP Import completed in {duration:.1f}s")
+            logger.info(f"  Processed: {stats['processed']}")
+            logger.info(f"  Inserted: {stats['inserted']}")
+            logger.info(f"  Duplicates skipped: {stats['skipped_duplicates']}")
+            logger.info(f"  Errors: {stats['errors']}")
+
+            # Send notification
+            if stats["errors"] == 0:
+                send_notification(
+                    title="✅ Nutrition Import Complete",
+                    message=(
+                        f"Imported {stats['inserted']} entries "
+                        f"({stats['skipped_duplicates']} duplicates skipped). "
+                        f"Took {duration:.0f}s."
+                    ),
+                    sound="Glass",
+                )
+            else:
+                send_notification(
+                    title="⚠️ Nutrition Import Completed with Errors",
+                    message=(
+                        f"Imported {stats['inserted']} entries, "
+                        f"{stats['errors']} errors. Check logs."
+                    ),
+                    sound="Purr",
+                )
+
+        finally:
+            # Clean up temp directory
+            if temp_dir and temp_dir.exists():
+                logger.info(f"Cleaning up: {temp_dir}")
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def watch_for_exports(watch_dir: Path):
@@ -189,7 +278,9 @@ def watch_for_exports(watch_dir: Path):
     logger.info("Starting Health Export Watcher")
     logger.info("=" * 70)
     logger.info(f"Watching: {watch_dir}")
-    logger.info("Target file: export.zip")
+    logger.info("Target files:")
+    logger.info("  - export.zip (Apple Health)")
+    logger.info("  - File-Export-*.zip (MyFitnessPal)")
     logger.info(f"Logging to: {LOG_FILE}")
     logger.info("=" * 70)
 

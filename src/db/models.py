@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     DECIMAL,
     Date,
+    Time,
     TIMESTAMP,
     TEXT,
     ForeignKey,
@@ -22,6 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 from typing import Any, Optional
+from datetime import date as date_type
 from decimal import Decimal
 
 # Base class for all models
@@ -76,6 +78,15 @@ class User(Base):
     )
     workouts = relationship(
         "Workout", back_populates="user", cascade="all, delete-orphan"
+    )
+    nutrition_logs = relationship(
+        "NutritionLog", back_populates="user", cascade="all, delete-orphan"
+    )
+    daily_nutrition_summaries = relationship(
+        "DailyNutritionSummary", back_populates="user", cascade="all, delete-orphan"
+    )
+    nutrition_goals = relationship(
+        "NutritionGoal", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -328,15 +339,15 @@ class Workout(Base):
     workout_type = Column(String(50), nullable=False)  # 'Boxing', 'Running', etc.
     start_time = Column(TIMESTAMP, nullable=False)
     end_time = Column(TIMESTAMP, nullable=False)
-    duration_minutes = Column(DECIMAL(10, 2), nullable=False)
+    duration_minutes: Decimal = Column(DECIMAL(10, 2), nullable=False)  # type: ignore[assignment]
 
     # Energy metrics (in kcal)
-    active_energy_kcal = Column(DECIMAL(10, 2))  # Workout calories
-    basal_energy_kcal = Column(DECIMAL(10, 2))  # BMR during workout
-    total_energy_kcal = Column(DECIMAL(10, 2))  # Active + Basal (calculated)
+    active_energy_kcal: Optional[Decimal] = Column(DECIMAL(10, 2))  # type: ignore[assignment]
+    basal_energy_kcal: Optional[Decimal] = Column(DECIMAL(10, 2))  # type: ignore[assignment]
+    total_energy_kcal: Optional[Decimal] = Column(DECIMAL(10, 2))  # type: ignore[assignment]
 
     # Distance (nullable - not all workouts have distance)
-    distance_km = Column(DECIMAL(10, 3))
+    distance_km: Optional[Decimal] = Column(DECIMAL(10, 3))  # type: ignore[assignment]
 
     # Heart rate aggregates (nullable - older workouts may not have HR)
     avg_heart_rate_bpm = Column(Integer)
@@ -362,3 +373,171 @@ class Workout(Base):
 
     def __repr__(self) -> str:
         return f"<Workout(type='{self.workout_type}', start={self.start_time}, duration={self.duration_minutes}min)>"
+
+
+class NutritionLog(Base):
+    """
+    Individual meal/food entries from MyFitnessPal CSV exports.
+
+    Each row represents a single food item logged in MFP.
+    Multiple entries per meal are common (e.g., breakfast has eggs, toast, coffee).
+    """
+
+    __tablename__ = "nutrition_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, default=1
+    )
+
+    # Temporal
+    date = Column(Date, nullable=False)
+    meal = Column(String(20), nullable=False)  # Breakfast, Lunch, Dinner, Snacks
+    time = Column(Time, nullable=True)  # Can be empty in CSV
+
+    # Core macros
+    calories: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    protein_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    carbohydrates_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    fat_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    fiber_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    sugar_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+
+    # Detailed fats
+    saturated_fat_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    polyunsaturated_fat_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    monounsaturated_fat_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    trans_fat_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+
+    # Micros
+    cholesterol_mg: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    sodium_mg: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    potassium_mg: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    vitamin_a_pct: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    vitamin_c_pct: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    calcium_pct: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    iron_pct: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+
+    # Metadata
+    note = Column(TEXT)
+    source = Column(String(50), default="myfitnesspal")
+    source_file = Column(String(255))
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+
+    # Relationship to user
+    user = relationship("User", back_populates="nutrition_logs")
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "date",
+            "meal",
+            "time",
+            "calories",
+            "protein_g",
+            name="uq_nutrition_log",
+        ),
+        Index("idx_nutrition_logs_date", "date"),
+        Index("idx_nutrition_logs_user_date", "user_id", "date"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<NutritionLog(date={self.date}, meal='{self.meal}', calories={self.calories})>"
+
+
+class DailyNutritionSummary(Base):
+    """
+    Aggregated daily nutrition totals computed from nutrition_logs.
+
+    Provides quick access to daily totals without re-aggregating logs.
+    Updated after each import.
+    """
+
+    __tablename__ = "daily_nutrition_summary"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, default=1
+    )
+    date = Column(Date, nullable=False)
+
+    # Totals
+    total_calories: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    total_protein_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    total_carbohydrates_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    total_fat_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    total_fiber_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    total_sugar_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    total_sodium_mg: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+
+    # Meal breakdown
+    breakfast_calories: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    lunch_calories: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    dinner_calories: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    snacks_calories: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+
+    # Counts
+    meal_count = Column(Integer)
+    entry_count = Column(Integer)
+
+    # Timestamps
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+
+    # Relationship to user
+    user = relationship("User", back_populates="daily_nutrition_summaries")
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_daily_nutrition"),
+        Index("idx_daily_nutrition_date", "date"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<DailyNutritionSummary(date={self.date}, calories={self.total_calories})>"
+        )
+
+
+class NutritionGoal(Base):
+    """
+    User's calorie and macro targets by day of week.
+
+    Different days can have different targets based on training schedule.
+    """
+
+    __tablename__ = "nutrition_goals"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, default=1
+    )
+    day_of_week = Column(Integer, nullable=False)  # 0=Monday, 6=Sunday
+
+    calorie_target = Column(Integer, nullable=False)
+    protein_target_g = Column(Integer, nullable=False)
+
+    # Macro percentages (should sum to 100)
+    carb_pct = Column(Integer, default=40)
+    protein_pct = Column(Integer, default=30)
+    fat_pct = Column(Integer, default=30)
+
+    effective_from = Column(Date, default=date_type.today)
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+
+    # Relationship to user
+    user = relationship("User", back_populates="nutrition_goals")
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "day_of_week", "effective_from", name="uq_nutrition_goal"
+        ),
+    )
+
+    def __repr__(self) -> str:
+        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        dow: int = int(self.day_of_week) if self.day_of_week is not None else -1  # type: ignore[arg-type]
+        day_name = days[dow] if 0 <= dow <= 6 else "?"
+        return f"<NutritionGoal({day_name}: {self.calorie_target}kcal, {self.protein_target_g}g protein)>"

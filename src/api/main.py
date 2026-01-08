@@ -5,7 +5,7 @@ FastAPI application for Health Tracking API.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.routes import body, activity, workouts, sleep
+from src.api.routes import body, activity, workouts, sleep, nutrition
 
 app = FastAPI(
     title="Health Tracking API",
@@ -29,6 +29,7 @@ app.include_router(body.router, prefix="/api/v1/body", tags=["Body Metrics"])
 app.include_router(activity.router, prefix="/api/v1/activity", tags=["Activity"])
 app.include_router(workouts.router, prefix="/api/v1/workouts", tags=["Workouts"])
 app.include_router(sleep.router, prefix="/api/v1/sleep", tags=["Sleep"])
+app.include_router(nutrition.router, prefix="/api/v1/nutrition", tags=["Nutrition"])
 
 
 @app.get("/")

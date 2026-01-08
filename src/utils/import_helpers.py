@@ -89,7 +89,7 @@ def import_records(
     # This generates a single INSERT with multiple VALUE rows instead of N INSERTs
     if records_to_insert:
         print(f"  Inserting {inserted} new records...")
-        db.bulk_insert_mappings(model_class, records_to_insert)
+        db.bulk_insert_mappings(model_class, records_to_insert)  # type: ignore[arg-type]
         db.commit()
         print(f"  ✓ Inserted {inserted} {metric_name}")
 
