@@ -6,6 +6,7 @@ connection pooling and error handling.
 """
 
 import os
+import sys
 from contextlib import contextmanager
 from typing import Generator
 
@@ -22,11 +23,27 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is not set")
 
+
+# Check if we're running an import script (disable echo for performance)
+def _is_import_script() -> bool:
+    """Check if current script is an import/orchestration script."""
+    script_name = os.path.basename(sys.argv[0]) if sys.argv else ""
+    return any(
+        keyword in script_name
+        for keyword in ["import_", "orchestrate_", "watch_", "run_import"]
+    )
+
+
 # Create database engine
-# echo=True logs all SQL queries (useful for debugging, disable in production)
+# echo=True logs all SQL queries (useful for debugging, disable in production and imports)
+# During imports, SQLAlchemy echo adds 10-20% overhead from I/O and logging
 engine = create_engine(
     DATABASE_URL,
-    echo=True if os.getenv("ENVIRONMENT") == "development" else False,
+    echo=(
+        os.getenv("ENVIRONMENT") == "development"
+        and not _is_import_script()
+        and os.getenv("DISABLE_SQL_ECHO") != "true"
+    ),
     pool_pre_ping=True,  # Verify connections before using (handles dropped connections)
     pool_size=5,  # Number of connections to keep open
     max_overflow=10,  # Additional connections under high load
