@@ -1,215 +1,141 @@
 # Health Tracking App
 
-A health data pipeline that imports Apple Health metrics into PostgreSQL for analysis and visualization.
+A personal health data pipeline that imports Apple Health and MyFitnessPal data into PostgreSQL, with a REST API, automated imports, and Claude Desktop integration via MCP.
 
-## Features
+## What This Does
 
-- **Comprehensive Data Import**: Weight, steps, activity, heart rate (resting, walking, HRV), VO2 max, sleep sessions, workouts
-- **Type-Safe Parsing**: Full TypedDict usage with memory-efficient XML parsing
-- **Database Migrations**: Alembic-managed schema with proper constraints
-- **Test Coverage**: Integration and unit tests with real data validation
-- **Professional Tooling**: Pre-commit hooks, linting, type checking, security scanning
+Export your health data from your iPhone, drop the file into a folder, and it automatically imports everything into a database. You can then:
 
-### Current Metrics Supported
+- Query your data through a REST API
+- Ask Claude questions about your health trends (via MCP)
+- Build dashboards and visualizations
+- Run your own analysis with SQL
 
-**Activity Metrics:**
-- Daily steps
-- Active energy (exercise calories)
-- Resting energy (basal metabolic rate)
-- Exercise minutes
+The system handles all the heavy lifting: parsing Apple's XML format, aggregating raw measurements into daily summaries, deduplicating records, and keeping everything in sync.
 
-**Heart Metrics:**
-- Resting heart rate
-- Walking/running heart rate
-- Heart rate variability (HRV)
+## Requirements
 
-**Body Metrics:**
-- Weight
-- VO2 Max
+- **Mac or Linux** (tested on macOS Sequoia)
+- **Python 3.13+**
+- **PostgreSQL** (local or cloud - I use [Neon](https://neon.tech/))
+- **iPhone with Apple Health** (for health metrics export)
+- **Apple Watch Series 7+** (optional, for workout/heart rate data)
+- **MyFitnessPal** (optional, for nutrition tracking)
 
-**Sleep:**
-- Sleep sessions (using 2-hour gap detection)
+## Supported Metrics
 
-**Workouts:**
-- Workout sessions with type, duration, and energy
-- Heart rate data (average, min, max)
-- Distance tracking for cardio activities
-- Indoor/outdoor classification
-- Supported types: Boxing, Running, Walking, Cycling, and more
+| Source | Data |
+|--------|------|
+| **Apple Health** | Weight, steps, active/resting energy, exercise minutes |
+| **Apple Health** | Heart rate (resting, walking, HRV), VO2 max |
+| **Apple Health** | Sleep sessions with stage breakdown |
+| **Apple Health** | Workouts (type, duration, calories, distance, heart rate zones) |
+| **MyFitnessPal** | Meals, calories, macros (protein/carbs/fat), daily summaries |
 
-## Data Volume
+## Quick Start
 
-| Metric | Records | Aggregation |
-|--------|---------|-------------|
-| Weight | 18 | Individual measurements |
-| Steps | 1,255 days | Daily totals |
-| Active Energy | 1.1M+ records | Daily totals |
-| Resting Energy | 1.1M+ records | Daily totals |
-| Exercise Minutes | 60K+ records | Daily totals |
-| Resting Heart Rate | 990 | Daily averages |
-| Walking Heart Rate | 926 | Daily averages |
-| HRV | 8,244 records | Daily maximum |
-| VO2 Max | 221 | Individual measurements |
-| Sleep Sessions | 1,233 | Multi-stage sessions |
-| Workouts | 658 | Individual workout sessions |
-
-## Architecture
-
-```
-health-tracking-app/
-├── src/
-│   ├── api/              # FastAPI endpoints (future)
-│   ├── db/
-│   │   ├── models.py     # SQLAlchemy ORM models
-│   │   └── session.py    # Database connection management
-│   ├── parsers/
-│   │   └── apple_health_parser.py  # XML parsing logic
-│   └── utils/
-│       └── import_helpers.py       # Reusable import utilities
-├── scripts/              # Data import scripts
-├── tests/
-│   ├── integration/      # Integration tests (database + parser)
-│   └── unit/             # Unit tests
-├── migrations/           # Alembic database migrations
-└── .env                  # Environment configuration (gitignored)
-```
-
-### Database Schema
-
-**7 Tables:**
-- `users` - User profiles
-- `body_metrics` - Weight, BMI, body fat %
-- `activity_metrics` - Steps, energy (active & resting), exercise (daily aggregates)
-- `heart_rate_metrics` - Resting HR, walking HR, HRV (daily aggregates)
-- `cardio_fitness` - VO2 max measurements
-- `sleep_sessions` - Complete sleep sessions with stage breakdowns
-- `workouts` - Individual workout sessions with metrics and heart rate data
-
-**Key Design Decisions:**
-- Flexible `metric_type` columns support multiple metrics without schema changes
-- Unique constraints prevent duplicate imports
-- Foreign key cascades ensure data integrity
-- Decimal(10,3) precision maintains Apple Health accuracy
-
-## Setup
-
-### Prerequisites
-
-- Python 3.13+
-- PostgreSQL database (Neon recommended)
-- Apple Health export file (Settings → Health → Profile → Export All Health Data)
-
-### Installation
+### 1. Clone and Install
 
 ```bash
-# Clone repository
-git clone <repository-url>
+git clone https://github.com/yourusername/health-tracking-app.git
 cd health-tracking-app
 
-# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate
 
-# Install dependencies
 pip install -e ".[dev]"
-
-# Set up pre-commit hooks
 pre-commit install
 ```
 
-### Configuration
+### 2. Set Up the Database
 
-Create `.env` file:
+Create a `.env` file:
 
 ```bash
 DATABASE_URL=postgresql://user:password@host:port/database?sslmode=require
 ENVIRONMENT=development
 ```
 
-### Database Setup
+Run migrations and seed initial data:
 
 ```bash
-# Run migrations
 alembic upgrade head
-
-# Insert initial user data
-python scripts/insert_initial_data.py
+python -m src.importers.insert_initial_data
 ```
 
-### Import Health Data
+### 3. Export Your Health Data
+
+**Apple Health:**
+1. Open the Health app on your iPhone
+2. Tap your profile picture (top right)
+3. Scroll down and tap "Export All Health Data"
+4. Save and AirDrop `export.zip` to your Mac
+
+**MyFitnessPal:**
+1. Log into MyFitnessPal on the web
+2. Go to Settings → Export Data
+3. Download the ZIP file (named like `File-Export-2026-01-01-to-2026-01-08.zip`)
+
+### 4. Import Your Data
+
+**Option A: Automatic (Recommended)**
+
+Install the folder watcher as a background service:
 
 ```bash
-# Import all metrics (run in order)
-python scripts/import_weight_history.py
-python scripts/import_steps_history.py
-python scripts/import_activity_metrics.py
-python scripts/import_heart_rate_metrics.py
-python scripts/import_vo2_max.py
-python scripts/import_sleep_data.py
-python scripts/import_workouts.py
+./scripts/install_watcher.sh
 ```
 
-## Testing
+Now just drop files into `~/Documents/health/`:
+- `export.zip` for Apple Health
+- `File-Export-*.zip` for MyFitnessPal
+
+The watcher detects new files, runs the import, and sends a macOS notification when done.
+
+**Option B: Manual**
 
 ```bash
-# Run all tests
-pytest
+# Apple Health
+python scripts/run_import.py ~/Downloads/export.zip
 
-# Run with coverage
-pytest --cov=src --cov-report=html
-
-# Run only integration tests
-pytest -m integration
-
-# Run only unit tests
-pytest -m unit
+# MyFitnessPal
+python -m src.importers.myfitnesspal_importer ~/Downloads/File-Export-*.zip
 ```
 
-## Development
+## Using the API
 
-### Code Quality
+Start the server:
 
 ```bash
-# Format code
-ruff format .
-
-# Lint
-ruff check . --fix
-
-# Type check
-mypy src/
-
-# Security scan
-bandit -c pyproject.toml -r src/
+uvicorn src.api.main:app --reload --port 8000
 ```
 
-### Pre-commit Hooks
+Example endpoints:
 
-Automatically run on `git commit`:
-- Ruff formatting and linting
-- MyPy type checking
-- Bandit security scanning
-- Trailing whitespace removal
-- YAML validation
+```bash
+# Weight trend over last 30 days
+curl http://localhost:8000/weight/trend?days=30
 
-## MCP Integration (Phase 4)
+# Today's workouts
+curl http://localhost:8000/workouts?days=1
 
-The Health Tracking app includes an MCP (Model Context Protocol) server that enables Claude to query your health data through natural language in the Claude Desktop app.
+# Calorie deficit for the week
+curl http://localhost:8000/nutrition/deficit?days=7
 
-### Quick Start
+# Full API docs
+open http://localhost:8000/docs
+```
 
-1. **Start the API:**
-   ```bash
-   uvicorn src.api.main:app --reload --port 8000
-   ```
+## Claude Desktop Integration (MCP)
 
-2. **Configure Claude Desktop:**
+The app includes an MCP server so you can ask Claude about your health data directly in Claude Desktop.
 
-   Edit config file:
-   - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+**Setup:**
 
-   Add:
+1. Edit your Claude Desktop config:
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+2. Add:
    ```json
    {
      "mcpServers": {
@@ -222,119 +148,130 @@ The Health Tracking app includes an MCP (Model Context Protocol) server that ena
    }
    ```
 
-3. **Restart Claude Desktop**
+3. Restart Claude Desktop
 
-4. **Ask Claude questions:**
-   - "What's my current weight?"
-   - "Show me my boxing stats for January"
-   - "Am I on track to hit my goal?"
+**Example questions:**
+- "What's my weight trend this month?"
+- "How many boxing sessions did I do in December?"
+- "Am I in a calorie deficit today?"
+- "Compare my workouts this week vs last week"
 
-See `src/mcp/README.md` for complete documentation.
+## Project Structure
 
-## Auto-Import System (Phase 5A)
-
-The Health Tracking app includes an automated import system that watches for Apple Health exports and automatically processes them when detected.
-
-### Quick Start
-
-**Option 1: Automatic Watcher (Recommended)**
-
-1. **Install the watcher service:**
-   ```bash
-   ./scripts/install_watcher.sh
-   ```
-
-2. **Export from Apple Health:**
-   - Open Health app on iPhone/iPad
-   - Tap your profile → Export All Health Data
-   - Save and AirDrop/share `export.zip` to Mac
-
-3. **Drop the file:**
-   - Move `export.zip` to `/Users/daleb/Documents/health/`
-   - Auto-import will start within 30 seconds
-   - You'll receive a macOS notification when complete
-
-**Option 2: Manual Import**
-
-```bash
-python scripts/run_import.py ~/Documents/health/export.zip
+```
+health-tracking-app/
+├── src/
+│   ├── api/                 # FastAPI routes and schemas
+│   │   ├── routes/          # Endpoint handlers
+│   │   └── schemas/         # Pydantic models
+│   ├── db/
+│   │   ├── models.py        # SQLAlchemy ORM models
+│   │   └── session.py       # Database connection
+│   ├── importers/           # Data import scripts
+│   │   ├── orchestrate_import.py    # Coordinates all imports
+│   │   ├── import_weight_history.py
+│   │   ├── import_steps_history.py
+│   │   ├── import_activity_metrics.py
+│   │   ├── import_heart_rate_metrics.py
+│   │   ├── import_vo2_max.py
+│   │   ├── import_sleep_data.py
+│   │   ├── import_workouts.py
+│   │   └── myfitnesspal_importer.py
+│   ├── mcp/                 # Claude Desktop integration
+│   ├── parsers/             # XML/CSV parsing logic
+│   ├── utils/               # Shared utilities
+│   └── watcher/             # Folder monitoring service
+├── migrations/              # Alembic database migrations
+├── tests/                   # pytest test suite
+├── scripts/                 # CLI tools
+└── logs/                    # Import history and watcher logs
 ```
 
-### Features
+## Database Schema
 
-- ✅ **Automatic Detection** - Watches folder for new export.zip files
-- ✅ **Smart Import** - Runs all 9 import scripts in sequence
-- ✅ **Duplicate Prevention** - Skips records that already exist
-- ✅ **macOS Notifications** - Success/failure alerts
-- ✅ **Comprehensive Logging** - Full history in `logs/import_history.log`
-- ✅ **Auto-Restart** - Watcher restarts if it crashes
-- ✅ **Background Service** - Runs on login via LaunchAgent
+**10 tables:**
 
-### Management Commands
+| Table | Purpose |
+|-------|---------|
+| `users` | User profiles |
+| `body_metrics` | Weight measurements |
+| `activity_metrics` | Steps, energy, exercise (daily aggregates) |
+| `heart_rate_metrics` | Resting HR, walking HR, HRV |
+| `cardio_fitness` | VO2 max |
+| `sleep_sessions` | Sleep with stage breakdown |
+| `workouts` | Workout sessions with metrics |
+| `nutrition_logs` | Individual meals/foods |
+| `daily_nutrition_summary` | Daily calorie/macro totals |
+| `nutrition_goals` | Target calories by day of week |
+
+All tables use unique constraints to prevent duplicate imports - you can re-run imports safely.
+
+## Managing the Watcher
 
 ```bash
-# Stop the watcher
+# View status
+launchctl list | grep health-import-watcher
+
+# Stop
 launchctl unload ~/Library/LaunchAgents/com.daleb.health-import-watcher.plist
 
-# Start the watcher
+# Start
 launchctl load ~/Library/LaunchAgents/com.daleb.health-import-watcher.plist
-
-# Check status
-launchctl list | grep health-import-watcher
 
 # View logs
 tail -f logs/import_history.log
 
-# Uninstall
+# Uninstall completely
 ./scripts/uninstall_watcher.sh
 ```
 
-### Architecture
+## Development
 
-- **Watcher** (`scripts/watch_health_exports.py`) - Monitors folder for files
-- **Orchestrator** (`scripts/orchestrate_import.py`) - Coordinates all imports
-- **Import Scripts** (9 total) - Parse and import specific metrics:
-  - Weight history
-  - Steps and activity metrics
-  - Resting energy (BMR)
-  - Heart rate metrics (resting, walking, HRV)
-  - VO2 max (cardio fitness)
-  - Sleep sessions
-  - Workouts
-- **Notifications** (`scripts/notification_helper.py`) - macOS alerts
+```bash
+# Run tests
+pytest
 
-### Troubleshooting
+# Run with coverage
+pytest --cov=src --cov-report=html
 
-**Watcher not starting?**
-- Check logs: `tail -f logs/watcher_stdout.log`
-- Verify Python path in plist file
-- Ensure watchdog is installed: `uv pip list | grep watchdog`
+# Type checking
+mypy src/
 
-**Import failing?**
-- Verify database connection in `.env`
-- Check that FastAPI server is NOT required (imports work standalone)
-- Review detailed logs in `logs/import_history.log`
+# Linting
+ruff check . --fix
 
-**No notification appearing?**
-- Grant Terminal/Python notification permissions in System Settings
-- Test manually: `python scripts/notification_helper.py`
+# Format
+ruff format .
+```
 
-## Future Enhancements
+Pre-commit hooks run automatically on `git commit` to catch issues early.
 
-- Automated data sync (iOS Shortcuts + Mac app)
-- MyFitnessPal nutrition integration
-- Predictive analytics and correlations
-- Additional health metrics (blood pressure, glucose, etc.)
+## Troubleshooting
+
+**Import not working?**
+- Check `logs/import_history.log` for detailed errors
+- Verify your `.env` has the correct `DATABASE_URL`
+- Make sure migrations ran: `alembic upgrade head`
+
+**Watcher not detecting files?**
+- Check `logs/watcher_stdout.log`
+- Verify the watch folder exists: `mkdir -p ~/Documents/health`
+- Restart: `launchctl unload ... && launchctl load ...`
+
+**No macOS notifications?**
+- Grant notification permissions to Terminal/Python in System Settings
+- Test manually: `python -m src.watcher.notification_helper`
+
+## Tech Stack
+
+- **[FastAPI](https://fastapi.tiangolo.com/)** - REST API
+- **[SQLAlchemy](https://www.sqlalchemy.org/)** - ORM
+- **[Alembic](https://alembic.sqlalchemy.org/)** - Database migrations
+- **[MCP](https://modelcontextprotocol.io/)** - Claude Desktop integration
+- **[defusedxml](https://github.com/tiran/defusedxml)** - Secure XML parsing
+- **[Watchdog](https://pythonhosted.org/watchdog/)** - File system monitoring
+- **[Neon](https://neon.tech/)** - Serverless PostgreSQL
 
 ## License
 
-MIT License - see LICENSE file
-
-## Acknowledgments
-
-Built with:
-- [FastAPI](https://fastapi.tiangolo.com/) - Web framework
-- [SQLAlchemy](https://www.sqlalchemy.org/) - ORM
-- [Alembic](https://alembic.sqlalchemy.org/) - Migrations
-- [defusedxml](https://github.com/tiran/defusedxml) - Secure XML parsing
-- [Neon](https://neon.tech/) - Serverless PostgreSQL
+MIT
