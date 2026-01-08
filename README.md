@@ -15,7 +15,7 @@ The system handles all the heavy lifting: parsing Apple's XML format, aggregatin
 
 ## Requirements
 
-- **Mac or Linux** (tested on macOS Sequoia)
+- **Mac or Linux** (tested on macOS Tahoe)
 - **Python 3.13+**
 - **PostgreSQL** (local or cloud - I use [Neon](https://neon.tech/))
 - **iPhone with Apple Health** (for health metrics export)

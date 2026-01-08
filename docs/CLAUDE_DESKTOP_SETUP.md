@@ -14,6 +14,7 @@ Then edit `claude_desktop_config.json`
 ```
 
 ## Step 2: Get Your Project Path
+
 ```bash
 # From project root
 pwd
@@ -24,19 +25,14 @@ Copy this path - you'll need it for the config.
 ## Step 3: Edit Config File
 
 If the file doesn't exist, create it. Add this content:
+
 ```json
 {
   "mcpServers": {
     "health-tracking": {
       "command": "python",
-      "args": [
-        "-m",
-        "src.mcp.server"
-      ],
-      "cwd": "PASTE_YOUR_PROJECT_PATH_HERE",
-      "env": {
-        "HEALTH_API_URL": "http://localhost:8000"
-      }
+      "args": ["-m", "src.mcp.server"],
+      "cwd": "PASTE_YOUR_PROJECT_PATH_HERE"
     }
   }
 }
@@ -46,7 +42,7 @@ If the file doesn't exist, create it. Add this content:
 
 **Example:**
 ```json
-"cwd": "/Users/daleb/Documents/projects/health-tracking-app"
+"cwd": "/Users/yourname/projects/health-tracking-app"
 ```
 
 ## Step 4: Verify JSON Syntax
@@ -57,7 +53,7 @@ https://jsonlint.com/
 ## Step 5: Restart Claude Desktop
 
 **macOS:**
-1. Cmd+Q to quit Claude Desktop
+1. Cmd+Q to quit Claude Desktop completely
 2. Reopen from Applications
 
 **Windows:**
@@ -67,7 +63,7 @@ https://jsonlint.com/
 ## Step 6: Verify Connection
 
 In a new conversation in Claude Desktop, look for:
-- Small 🔌 icon near the text input
+- Small hammer/tools icon near the text input
 - Or "Tools" indicator in the sidebar
 
 ## Step 7: Test with Query
@@ -75,18 +71,13 @@ In a new conversation in Claude Desktop, look for:
 Try asking:
 - "What's my current weight?"
 - "Show my workout stats for the last week"
+- "Am I in a calorie deficit today?"
 
 Claude should respond with your actual data!
 
 ## Troubleshooting
 
 ### Server Not Connecting
-
-**Check FastAPI is running:**
-```bash
-curl http://localhost:8000/health
-```
-Should return: `{"status":"healthy"}`
 
 **Check project path:**
 Make sure the `cwd` in your config points to the project root (where `src/` folder is).
@@ -97,6 +88,9 @@ Try running manually:
 cd /your/project/path
 python -m src.mcp.server
 ```
+
+**Check database connection:**
+The MCP server connects directly to your database. Verify `.env` has correct `DATABASE_URL`.
 
 ### Tools Not Appearing
 
@@ -109,5 +103,11 @@ python -m src.mcp.server
 
 Make sure your Python environment has all dependencies:
 ```bash
-uv pip install fastmcp requests
+pip install fastmcp
 ```
+
+### "No data" Responses
+
+1. Verify imports completed successfully
+2. Check the date range you're asking about has data
+3. Try a known query like "What's my latest weight?"

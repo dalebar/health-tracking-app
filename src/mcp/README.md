@@ -1,21 +1,18 @@
 # Health Tracking MCP Server
 
-MCP (Model Context Protocol) server that enables Claude to query your health data through natural language.
+MCP (Model Context Protocol) server that enables Claude Desktop to query your health data through natural language.
 
 ## Prerequisites
 
-1. **FastAPI server running:**
-   ```bash
-   uvicorn src.api.main:app --reload --port 8000
-   ```
+1. **Database with imported data** (run imports first)
 
 2. **FastMCP installed:**
    ```bash
-   uv pip install fastmcp
+   pip install fastmcp
    ```
 
-3. **Claude Desktop app installed:**
-   - Download from: https://claude.ai/download
+3. **Claude Desktop app:**
+   Download from https://claude.ai/download
 
 ## Installation
 
@@ -25,103 +22,137 @@ MCP (Model Context Protocol) server that enables Claude to query your health dat
 
 **Windows:** Edit `%APPDATA%\Claude\claude_desktop_config.json`
 
-**Add this configuration:**
+Add this configuration:
+
 ```json
 {
   "mcpServers": {
     "health-tracking": {
       "command": "python",
-      "args": [
-        "-m",
-        "src.mcp.server"
-      ],
-      "cwd": "/Users/daleb/Documents/projects/health-tracking-app",
-      "env": {
-        "HEALTH_API_URL": "http://localhost:8000"
-      }
+      "args": ["-m", "src.mcp.server"],
+      "cwd": "/path/to/health-tracking-app"
     }
   }
 }
 ```
 
-**Important:** Replace `/Users/daleb/Documents/projects/health-tracking-app` with your actual project path.
+**Important:** Replace `/path/to/health-tracking-app` with your actual project path. Find it with `pwd` from the project root.
 
 ### Step 2: Restart Claude Desktop
 
-After saving the config, completely quit and restart Claude Desktop app.
+After saving the config, completely quit (Cmd+Q) and restart Claude Desktop.
 
 ### Step 3: Verify Connection
 
-In Claude Desktop, you should see a small 🔌 icon or tools indicator showing the MCP server is connected.
+In Claude Desktop, you should see a tools indicator (hammer icon or similar) showing the MCP server is connected.
 
 ## Usage Examples
 
-Once configured, you can ask Claude natural language questions:
+Once configured, ask Claude natural language questions:
 
 ### Weight Tracking
 - "What's my current weight?"
-- "Show me my weight progress over the last 30 days"
+- "Show me my weight trend for the last 30 days"
 - "Am I on track to hit my goal?"
-- "What's my weight loss rate?"
 
 ### Activity & Energy
 - "What was my TDEE yesterday?"
 - "Show me my activity summary for the last week"
-- "How many calories did I burn on Friday?"
+- "How many steps did I take on Friday?"
 
 ### Workouts
 - "How many boxing sessions did I do this month?"
 - "Show me my workout stats for January"
-- "Compare my training intensity pre and post injury"
-- "What was my average heart rate during boxing last week?"
+- "What was my average heart rate during workouts last week?"
+- "Compare my training this month vs last month"
+
+### Sleep
+- "How did I sleep last night?"
+- "What's my average sleep duration this week?"
+
+### Nutrition
+- "What did I eat yesterday?"
+- "Am I in a calorie deficit today?"
+- "Show me my nutrition summary for the week"
+- "What's my calorie goal for today?"
+- "How much protein did I have this week?"
 
 ### Analysis
 - "Give me a weekly summary"
-- "How's my progress toward 100kg?"
-- "Compare my last 30 days to the previous 30 days"
+- "How's my overall progress?"
 
-## Available Tools
+## Available Tools (21 total)
 
-The MCP server provides these tools to Claude:
+### Weight (3 tools)
+| Tool | Description |
+|------|-------------|
+| `get_latest_weight()` | Most recent weight measurement |
+| `get_weight_history(days, limit)` | Weight measurements over time |
+| `get_weight_trend(days)` | Trend analysis with averages and change rate |
 
-**Body Metrics:**
-- `get_latest_weight()` - Most recent weight
-- `get_weight_history()` - Weight measurements over time
-- `get_weight_trend()` - Trend analysis with averages
+### Activity (3 tools)
+| Tool | Description |
+|------|-------------|
+| `get_daily_activity(date)` | Complete breakdown for a specific date |
+| `get_activity_summary(days)` | Summary over date range |
+| `get_recent_tdee(days)` | Daily energy expenditure breakdown |
 
-**Activity:**
-- `get_daily_activity()` - Complete breakdown for a date
-- `get_activity_summary()` - Summary over date range
-- `get_recent_tdee()` - Daily energy expenditure
+### Workouts (4 tools)
+| Tool | Description |
+|------|-------------|
+| `get_workouts(workout_type, days, limit)` | Workout history with filters |
+| `get_workout_by_id(id)` | Specific workout details |
+| `get_workout_stats(days)` | Aggregated statistics by type |
+| `get_boxing_workouts(days, limit)` | Boxing-specific analysis |
 
-**Workouts:**
-- `get_workouts()` - Workout history with filters
-- `get_workout_by_id()` - Specific workout details
-- `get_workout_stats()` - Aggregated statistics by type
-- `get_boxing_workouts()` - Boxing-specific analysis
+### Sleep (2 tools)
+| Tool | Description |
+|------|-------------|
+| `get_recent_sleep(days)` | Recent sleep sessions |
+| `get_sleep_stats(days)` | Sleep statistics and averages |
 
-**Analysis:**
-- `get_weekly_summary()` - Complete week overview
-- `get_progress_to_goal()` - Goal tracking
-- `compare_training_periods()` - Period comparison
+### Nutrition (7 tools)
+| Tool | Description |
+|------|-------------|
+| `get_daily_nutrition(date)` | Daily calorie/macro summary |
+| `get_meals_for_date(date)` | Individual meals for a date |
+| `get_nutrition_summary(days)` | Summary over date range |
+| `get_nutrition_goals()` | All weekly calorie goals |
+| `get_todays_nutrition_goal()` | Today's specific goal |
+| `get_nutrition_trends(days)` | Calorie trends over time |
+| `get_calorie_deficit(days)` | Deficit/surplus analysis |
+
+### Analysis (2 tools)
+| Tool | Description |
+|------|-------------|
+| `get_weekly_summary()` | Complete week overview |
+| `get_progress_to_goal()` | Goal tracking progress |
+| `compare_training_periods(period1, period2, gap)` | Period comparison |
 
 ## Troubleshooting
 
 ### "MCP server not connected"
-1. Verify FastAPI is running at http://localhost:8000
-2. Check Claude Desktop config file syntax (valid JSON)
-3. Restart Claude Desktop completely
-4. Check project path in config is correct
+
+1. Check Claude Desktop config file syntax (valid JSON)
+2. Verify project path in `cwd` is correct
+3. Restart Claude Desktop completely (Cmd+Q, not just close window)
+4. Try running manually to check for errors:
+   ```bash
+   cd /path/to/health-tracking-app
+   python -m src.mcp.server
+   ```
 
 ### "Tool execution failed"
-1. Ensure FastAPI server is running
-2. Check API logs for errors
-3. Verify database is accessible
+
+1. Check database connection in `.env`
+2. Verify data exists for the queried date range
+3. Check logs for specific error messages
 
 ### "No data returned"
-1. Check date ranges (data might not exist for that period)
-2. Verify imports completed successfully
-3. Query API directly to confirm data exists
+
+1. Confirm imports completed successfully
+2. Check date ranges (data might not exist for that period)
+3. Query database directly to confirm data exists
 
 ## Development
 
@@ -134,15 +165,32 @@ python -m src.mcp.server
 
 ### Adding New Tools
 
-1. Add tool function to `server.py` with `@mcp.tool()` decorator
-2. Include clear docstring (Claude uses this)
-3. Add type hints for parameters
-4. Test with FastAPI endpoint first
-5. Restart Claude Desktop to pick up changes
+1. Add function to `server.py` with `@mcp.tool()` decorator
+2. Include clear docstring (Claude uses this for context)
+3. Add type hints for all parameters
+4. Restart Claude Desktop to pick up changes
+
+Example:
+```python
+@mcp.tool()
+def get_my_metric(days: int = 7) -> dict:
+    """
+    Get my custom metric for the specified number of days.
+
+    Args:
+        days: Number of days to look back (default: 7)
+
+    Returns:
+        dict: Metric data with values and dates
+    """
+    # Implementation here
+    pass
+```
 
 ### Debugging
 
-Enable debug logging:
+Check MCP server logs in Claude Desktop's developer tools, or run standalone with verbose logging:
+
 ```python
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -150,7 +198,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 ## Security Notes
 
-- MCP server runs locally (no cloud)
-- Only accessible from Claude Desktop on your machine
-- Uses same API as Streamlit dashboard
-- No authentication needed (local-only access)
+- MCP server runs locally only
+- No authentication required (local-only access)
+- Data never leaves your machine
+- Uses direct database queries (no external API calls)
