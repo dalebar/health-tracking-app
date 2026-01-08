@@ -254,6 +254,55 @@ def get_boxing_workouts(days: int = 30, limit: int = 100) -> Any:
 
 
 # ============================================================================
+# SLEEP TOOLS
+# ============================================================================
+
+
+@mcp.tool()
+def get_latest_sleep() -> Any:
+    """
+    Get most recent sleep session with stage breakdown.
+
+    Returns:
+        dict: Latest sleep session with duration and sleep stages
+    """
+    return _get("/api/v1/sleep/latest")
+
+
+@mcp.tool()
+def get_sleep_history(days: int = 7, limit: int = 30) -> Any:
+    """
+    Get sleep session history.
+
+    Args:
+        days: Number of days to look back (default: 7)
+        limit: Maximum sessions to return (default: 30)
+
+    Returns:
+        dict: Sleep sessions with duration and stage breakdowns
+    """
+    params: dict[str, Any] = {
+        "days": days,
+        "limit": limit,
+    }
+    return _get("/api/v1/sleep/sessions", params=params)
+
+
+@mcp.tool()
+def get_sleep_summary(days: int = 7) -> Any:
+    """
+    Get sleep summary with averages over date range.
+
+    Args:
+        days: Number of days for summary (default: 7)
+
+    Returns:
+        dict: Average total sleep, deep, REM, core, and awake minutes
+    """
+    return _get("/api/v1/sleep/summary", params={"days": days})
+
+
+# ============================================================================
 # CONVENIENCE/ANALYSIS TOOLS
 # ============================================================================
 
@@ -262,7 +311,7 @@ def get_boxing_workouts(days: int = 30, limit: int = 100) -> Any:
 def get_weekly_summary() -> Any:
     """
     Get comprehensive summary of the last 7 days.
-    Includes weight, activity, and workout metrics.
+    Includes weight, activity, sleep, and workout metrics.
 
     Returns:
         dict: Complete weekly summary across all metrics
@@ -279,6 +328,9 @@ def get_weekly_summary() -> Any:
         "end_date": end_date.isoformat(),
     }
     activity = _get("/api/v1/activity/summary", params=activity_params)
+
+    # Get sleep summary
+    sleep = _get("/api/v1/sleep/summary", params={"days": 7})
 
     # Get workouts
     workout_params: dict[str, Any] = {
@@ -298,6 +350,7 @@ def get_weekly_summary() -> Any:
     return {
         "weight": weight,
         "activity": activity,
+        "sleep": sleep,
         "workouts": workouts,
         "workout_stats": workout_stats,
     }
