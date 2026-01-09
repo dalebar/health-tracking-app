@@ -16,7 +16,7 @@ The system handles all the heavy lifting: parsing Apple's XML format, aggregatin
 ## Requirements
 
 - **Mac or Linux** (tested on macOS Tahoe)
-- **Python 3.13+**
+- **Python 3.12+**
 - **PostgreSQL** (local or cloud - I use [Neon](https://neon.tech/))
 - **iPhone with Apple Health** (for health metrics export)
 - **Apple Watch Series 7+** (optional, for workout/heart rate data)
@@ -130,7 +130,7 @@ open http://localhost:8000/docs
 
 The app includes an MCP server so you can ask Claude about your health data directly in Claude Desktop.
 
-**Setup:**
+**Setup (Local API):**
 
 1. Edit your Claude Desktop config:
    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -150,11 +150,57 @@ The app includes an MCP server so you can ask Claude about your health data dire
 
 3. Restart Claude Desktop
 
+**Setup (Deployed API):**
+
+If you've deployed the API to Render, add environment variables to connect to it:
+
+```json
+{
+  "mcpServers": {
+    "health-tracking": {
+      "command": "python",
+      "args": ["-m", "src.mcp.server"],
+      "cwd": "/path/to/health-tracking-app",
+      "env": {
+        "HEALTH_API_URL": "https://your-app.onrender.com",
+        "HEALTH_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
 **Example questions:**
 - "What's my weight trend this month?"
 - "How many boxing sessions did I do in December?"
 - "Am I in a calorie deficit today?"
 - "Compare my workouts this week vs last week"
+
+## Cloud Deployment
+
+Deploy the API and dashboard to [Render](https://render.com) for access from anywhere.
+
+### Quick Deploy
+
+1. Push to GitHub
+2. Connect repo to Render
+3. Use the included `render.yaml` blueprint, or create services manually:
+
+**API Service:**
+- Build: `pip install -r requirements.txt`
+- Start: `uvicorn src.api.main:app --host 0.0.0.0 --port $PORT`
+- Environment: `DATABASE_URL`, `API_KEY` (generate), `PYTHON_VERSION=3.12`
+
+**Dashboard Service:**
+- Build: `pip install -r requirements.txt`
+- Start: `streamlit run src/dashboard/app.py --server.port $PORT --server.address 0.0.0.0`
+- Environment: `HEALTH_API_URL`, `HEALTH_API_KEY`, `PYTHON_VERSION=3.12`
+
+### API Authentication
+
+When `API_KEY` is set, all `/api/v1/*` endpoints require the `X-API-Key` header. The `/health` endpoint remains public for Render health checks.
+
+For local development, leave `API_KEY` unset to bypass authentication.
 
 ## Project Structure
 
@@ -265,12 +311,14 @@ Pre-commit hooks run automatically on `git commit` to catch issues early.
 ## Tech Stack
 
 - **[FastAPI](https://fastapi.tiangolo.com/)** - REST API
+- **[Streamlit](https://streamlit.io/)** - Dashboard
 - **[SQLAlchemy](https://www.sqlalchemy.org/)** - ORM
 - **[Alembic](https://alembic.sqlalchemy.org/)** - Database migrations
 - **[MCP](https://modelcontextprotocol.io/)** - Claude Desktop integration
 - **[defusedxml](https://github.com/tiran/defusedxml)** - Secure XML parsing
 - **[Watchdog](https://pythonhosted.org/watchdog/)** - File system monitoring
 - **[Neon](https://neon.tech/)** - Serverless PostgreSQL
+- **[Render](https://render.com/)** - Cloud deployment
 
 ## License
 
