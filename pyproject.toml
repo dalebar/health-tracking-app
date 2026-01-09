@@ -3,7 +3,7 @@ name = "health-tracking-app"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.17.2",
     "defusedxml>=0.7.1",
@@ -38,7 +38,7 @@ exclude_dirs = ["tests"]
 skips = ["B101"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 exclude = ["scripts/"]

@@ -1,0 +1,32 @@
+# Core dependencies for Render deployment
+# Generated from pyproject.toml
+
+# Web framework
+fastapi>=0.128.0
+uvicorn[standard]>=0.40.0
+pydantic-settings>=2.12.0
+
+# Database
+sqlalchemy>=2.0.45
+psycopg2-binary>=2.9.11
+alembic>=1.17.2
+
+# XML parsing
+defusedxml>=0.7.1
+
+# HTTP client
+requests>=2.31.0
+
+# Environment
+python-dotenv>=1.2.1
+
+# MCP server
+fastmcp>=0.5.0
+
+# Dashboard
+streamlit>=1.32.0
+pandas>=2.2.0
+plotly>=5.18.0
+
+# File watching (for local import service)
+watchdog>=5.0.0

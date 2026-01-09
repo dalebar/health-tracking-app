@@ -4,23 +4,32 @@ MCP Server for Health Tracking API.
 Provides tools for Claude to query health data through natural language.
 """
 
-from fastmcp import FastMCP
+import os
 from datetime import date, timedelta
+from typing import Any, Optional
+
 import requests
-from typing import Optional, Any
+from fastmcp import FastMCP
 
 # Initialize MCP server
 mcp = FastMCP("Health Tracking")
 
-# API base URL
-API_BASE_URL = "http://localhost:8000"
+# API configuration from environment
+API_BASE_URL = os.getenv("HEALTH_API_URL", "http://localhost:8000")
+API_KEY = os.getenv("HEALTH_API_KEY", "")
 
 
 def _get(endpoint: str, params: dict[str, Any] | None = None) -> Any:
-    """Make GET request to FastAPI backend."""
+    """Make GET request to FastAPI backend with optional API key auth."""
     url = f"{API_BASE_URL}{endpoint}"
+    headers: dict[str, str] = {}
+
+    # Include API key if configured
+    if API_KEY:
+        headers["X-API-Key"] = API_KEY
+
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, headers=headers, timeout=10)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:

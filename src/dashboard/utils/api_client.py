@@ -2,22 +2,41 @@
 API client for fetching health data from FastAPI backend.
 """
 
-import requests
+import os
 from datetime import date
 from typing import Any, Optional
+
+import requests
 
 
 class HealthAPIClient:
     """Client for Health Tracking API."""
 
-    def __init__(self, base_url: str = "http://localhost:8000"):
-        self.base_url = base_url
+    def __init__(
+        self,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ):
+        """
+        Initialize API client.
+
+        Args:
+            base_url: API URL. Defaults to HEALTH_API_URL env var or localhost.
+            api_key: API key for auth. Defaults to HEALTH_API_KEY env var.
+        """
+        self.base_url = base_url or os.getenv("HEALTH_API_URL", "http://localhost:8000")
+        self.api_key = api_key or os.getenv("HEALTH_API_KEY", "")
 
     def _get(self, endpoint: str, params: dict[str, Any] | None = None) -> Any:
-        """Make GET request to API."""
+        """Make GET request to API with optional auth."""
         url = f"{self.base_url}{endpoint}"
+        headers: dict[str, str] = {}
+
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+
         try:
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers=headers, timeout=10)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
