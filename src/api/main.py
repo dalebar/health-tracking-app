@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.auth import verify_api_key
-from src.api.routes import activity, body, nutrition, sleep, workouts
+from src.api.routes import activity, body, nutrition, sleep, supplements, workouts
 
 app = FastAPI(
     title="Health Tracking API",
@@ -58,6 +58,12 @@ app.include_router(
     nutrition.router,
     prefix="/api/v1/nutrition",
     tags=["Nutrition"],
+    dependencies=[Depends(verify_api_key)],
+)
+app.include_router(
+    supplements.router,
+    prefix="/api/v1/supplements",
+    tags=["Supplements"],
     dependencies=[Depends(verify_api_key)],
 )
 

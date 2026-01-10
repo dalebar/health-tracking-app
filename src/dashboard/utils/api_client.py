@@ -112,3 +112,64 @@ class HealthAPIClient:
         if end_date:
             params["end_date"] = end_date.isoformat()
         return self._get("/api/v1/workouts/stats/by-type", params=params)
+
+    # Nutrition
+    def get_daily_nutrition(self, target_date: date) -> Any:
+        """Get nutrition summary for a specific date."""
+        return self._get(f"/api/v1/nutrition/daily/{target_date.isoformat()}")
+
+    def get_nutrition_summary(self, days: int = 7) -> Any:
+        """Get nutrition summary over date range."""
+        return self._get("/api/v1/nutrition/summary", params={"days": days})
+
+    def get_meals_for_date(self, target_date: date) -> Any:
+        """Get meal breakdown for a specific date."""
+        return self._get(f"/api/v1/nutrition/meals/{target_date.isoformat()}")
+
+    def get_nutrition_goals(self) -> Any:
+        """Get nutrition goals by day of week."""
+        return self._get("/api/v1/nutrition/goals")
+
+    def get_today_goal(self) -> Any:
+        """Get nutrition goal for today."""
+        return self._get("/api/v1/nutrition/goals/today")
+
+    def get_nutrition_trends(self, days: int = 30) -> Any:
+        """Get nutrition trends over time."""
+        return self._get("/api/v1/nutrition/trends", params={"days": days})
+
+    def get_calorie_deficit(self, days: int = 7) -> Any:
+        """Get calorie deficit analysis (TDEE - intake)."""
+        return self._get("/api/v1/nutrition/deficit", params={"days": days})
+
+    # Energy (TDEE breakdown)
+    def get_energy_summary(self, start_date: date, end_date: date) -> Any:
+        """Get energy expenditure breakdown."""
+        params = {
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+        }
+        return self._get("/api/v1/activity/summary", params=params)
+
+    # Supplements
+    def get_supplements(self, active_only: bool = True) -> Any:
+        """Get list of supplements."""
+        return self._get("/api/v1/supplements", params={"active_only": active_only})
+
+    def get_supplement_stack(self) -> Any:
+        """Get supplement stack with today's status."""
+        return self._get("/api/v1/supplements/stack")
+
+    def get_supplement_status_today(self) -> Any:
+        """Get today's supplement status."""
+        return self._get("/api/v1/supplements/status/today")
+
+    def get_supplement_status(self, target_date: date) -> Any:
+        """Get supplement status for a specific date."""
+        return self._get(f"/api/v1/supplements/status/{target_date.isoformat()}")
+
+    def get_supplement_adherence(self, weeks_ago: int = 0) -> Any:
+        """Get weekly supplement adherence."""
+        return self._get(
+            "/api/v1/supplements/adherence/week", params={"weeks_ago": weeks_ago}
+        )
