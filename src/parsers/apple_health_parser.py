@@ -1319,7 +1319,12 @@ class AppleHealthParser:
             except (ValueError, TypeError):
                 continue
             finally:
-                elem.clear()
+                # Only clear top-level elements we've processed.
+                # Child elements (WorkoutStatistics, MetadataEntry, etc.) must NOT
+                # be cleared here, or their parent Workout element won't be able
+                # to read their attributes when it's processed later.
+                if elem.tag in ("Record", "Workout"):
+                    elem.clear()
 
         print("  ✅ XML parsing complete, aggregating data...")
 
