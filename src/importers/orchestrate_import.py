@@ -181,7 +181,9 @@ if __name__ == "__main__":
         print("Usage: orchestrate_import.py <path_to_export.zip>")
         print()
         print("Example:")
-        print("  python scripts/orchestrate_import.py ~/Documents/health/export.zip")
+        print(
+            "  python -m src.importers.orchestrate_import ~/Documents/health/export.zip"
+        )
         sys.exit(1)
 
     zip_path = Path(sys.argv[1])

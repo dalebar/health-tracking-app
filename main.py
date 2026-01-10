@@ -12,7 +12,7 @@ def main():
     print("=" * 60)
     print()
     print("Available commands:")
-    print("  - Import data: See scripts/import_*.py")
+    print("  - Import data: python scripts/run_import.py <export.zip>")
     print("  - Run tests: pytest")
     print("  - Migrations: alembic upgrade head")
     print()
