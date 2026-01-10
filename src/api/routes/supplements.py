@@ -20,7 +20,7 @@ from src.db.models import User, Supplement
 router = APIRouter()
 
 
-# === Supplement CRUD ===
+# === List and Stack (must come before /{supplement_id}) ===
 
 
 @router.get("/", response_model=SupplementListResponse)
@@ -47,6 +47,60 @@ def list_supplements(
         total=len(supplements),
         active_count=active_count,
     )
+
+
+@router.get("/stack", response_model=SupplementStackResponse)
+def get_supplement_stack(db: Session = Depends(get_database)):
+    """
+    Get complete supplement stack grouped by timing.
+
+    Perfect for dashboard display.
+    """
+    user = db.query(User).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    today = date.today()
+
+    # Get all active supplements
+    supplements = (
+        db.query(Supplement)
+        .filter(Supplement.user_id == user.id, Supplement.active.is_(True))
+        .order_by(Supplement.name)
+        .all()
+    )
+
+    # Group by timing
+    morning = []
+    evening = []
+    other = []
+
+    for supp in supplements:
+        response = SupplementResponse.model_validate(supp)
+        timing = (supp.timing or "").lower()
+
+        if "morning" in timing or "breakfast" in timing or "am" in timing:
+            morning.append(response)
+        elif (
+            "evening" in timing
+            or "night" in timing
+            or "bed" in timing
+            or "pm" in timing
+        ):
+            evening.append(response)
+        else:
+            other.append(response)
+
+    return SupplementStackResponse(
+        date=today,
+        morning=morning,
+        evening=evening,
+        other=other,
+        total_active=len(supplements),
+    )
+
+
+# === CRUD operations ===
 
 
 @router.post("/", response_model=SupplementResponse, status_code=201)
@@ -150,57 +204,3 @@ def delete_supplement(
     # Soft delete - just deactivate
     supplement.active = False  # type: ignore[assignment]
     db.commit()
-
-
-# === Stack View ===
-
-
-@router.get("/stack", response_model=SupplementStackResponse)
-def get_supplement_stack(db: Session = Depends(get_database)):
-    """
-    Get complete supplement stack grouped by timing.
-
-    Perfect for dashboard display.
-    """
-    user = db.query(User).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    today = date.today()
-
-    # Get all active supplements
-    supplements = (
-        db.query(Supplement)
-        .filter(Supplement.user_id == user.id, Supplement.active.is_(True))
-        .order_by(Supplement.name)
-        .all()
-    )
-
-    # Group by timing
-    morning = []
-    evening = []
-    other = []
-
-    for supp in supplements:
-        response = SupplementResponse.model_validate(supp)
-        timing = (supp.timing or "").lower()
-
-        if "morning" in timing or "breakfast" in timing or "am" in timing:
-            morning.append(response)
-        elif (
-            "evening" in timing
-            or "night" in timing
-            or "bed" in timing
-            or "pm" in timing
-        ):
-            evening.append(response)
-        else:
-            other.append(response)
-
-    return SupplementStackResponse(
-        date=today,
-        morning=morning,
-        evening=evening,
-        other=other,
-        total_active=len(supplements),
-    )
