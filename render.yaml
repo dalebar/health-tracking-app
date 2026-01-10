@@ -14,7 +14,7 @@ services:
       - key: API_KEY
         generateValue: true  # Render generates secure random key
       - key: PYTHON_VERSION
-        value: "3.12"
+        value: "3.12.8"
       - key: CORS_ORIGINS
         value: "*"  # Configure for production if needed
     healthCheckPath: /health
