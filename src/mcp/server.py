@@ -15,7 +15,7 @@ from fastmcp import FastMCP
 mcp = FastMCP("Health Tracking")
 
 # API configuration from environment
-API_BASE_URL = os.getenv("HEALTH_API_URL", "http://localhost:8000")
+API_BASE_URL = os.getenv("HEALTH_API_URL", "http://localhost:8000").rstrip("/")
 API_KEY = os.getenv("HEALTH_API_KEY", "")
 
 
