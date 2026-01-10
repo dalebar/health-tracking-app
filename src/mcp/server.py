@@ -612,27 +612,12 @@ def compare_training_periods(
 @mcp.tool()
 def get_supplement_stack() -> Any:
     """
-    Get the current supplement stack with today's status.
+    Get the current supplement stack grouped by timing (morning/evening).
 
     Returns:
-        dict: Active supplements with taken/not-taken status for today,
-              plus weekly adherence percentage
+        dict: Active supplements organized by when to take them
     """
     return _get("/api/v1/supplements/stack")
-
-
-@mcp.tool()
-def get_supplement_adherence(weeks_ago: int = 0) -> Any:
-    """
-    Get weekly supplement adherence statistics.
-
-    Args:
-        weeks_ago: Number of weeks in the past (0 = current week)
-
-    Returns:
-        dict: Per-supplement and overall adherence percentages
-    """
-    return _get("/api/v1/supplements/adherence/week", params={"weeks_ago": weeks_ago})
 
 
 @mcp.tool()
@@ -644,7 +629,7 @@ def list_supplements(active_only: bool = True) -> Any:
         active_only: Only return active supplements (default: True)
 
     Returns:
-        dict: List of supplements with dosage, timing, and category info
+        dict: List of supplements with dosage and timing info
     """
     return _get("/api/v1/supplements", params={"active_only": active_only})
 

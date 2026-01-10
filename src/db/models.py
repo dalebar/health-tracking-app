@@ -91,9 +91,6 @@ class User(Base):
     supplements = relationship(
         "Supplement", back_populates="user", cascade="all, delete-orphan"
     )
-    supplement_logs = relationship(
-        "SupplementLog", back_populates="user", cascade="all, delete-orphan"
-    )
 
     def __repr__(self) -> str:
         """String representation for debugging."""
@@ -553,7 +550,7 @@ class Supplement(Base):
     """
     Master list of supplements a user takes.
 
-    Includes dosage information and nutritional content for gap analysis.
+    Simple tracking of daily supplement stack.
     """
 
     __tablename__ = "supplements"
@@ -565,33 +562,12 @@ class Supplement(Base):
 
     # Basic info
     name = Column(String(100), nullable=False)
-    brand = Column(String(100))
-    dosage = Column(String(50))  # "5000", "500"
+    dosage = Column(String(50))  # "5000 IU", "500mg"
     dosage_unit = Column(String(20))  # "IU", "mg", "g"
-    timing = Column(String(50))  # "Morning", "With food", "Before bed"
-    frequency = Column(String(50), default="daily")  # "daily", "twice daily"
-    category = Column(String(50))  # "Vitamin", "Mineral", "Amino Acid"
-
-    # Nutritional content (for gap analysis)
-    vitamin_a_iu = Column(Integer)
-    vitamin_c_mg = Column(Integer)
-    vitamin_d_iu = Column(Integer)
-    vitamin_e_iu = Column(Integer)
-    vitamin_k_mcg = Column(Integer)
-    vitamin_b12_mcg: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
-    folate_mcg = Column(Integer)
-    calcium_mg = Column(Integer)
-    iron_mg: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
-    magnesium_mg = Column(Integer)
-    zinc_mg: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
-    omega3_mg = Column(Integer)
-    protein_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
-    creatine_g: Optional[Decimal] = Column(DECIMAL(8, 2))  # type: ignore[assignment]
+    timing = Column(String(50))  # "Morning", "Evening", "With food"
 
     # Status
     active = Column(Boolean, default=True, nullable=False)
-    notes = Column(TEXT)
-    purchase_url = Column(String(500))
 
     # Timestamps
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
@@ -599,55 +575,9 @@ class Supplement(Base):
 
     # Relationships
     user = relationship("User", back_populates="supplements")
-    logs = relationship(
-        "SupplementLog", back_populates="supplement", cascade="all, delete-orphan"
-    )
 
     # Constraints
     __table_args__ = (Index("idx_supplements_user_active", "user_id", "active"),)
 
     def __repr__(self) -> str:
         return f"<Supplement(name='{self.name}', dosage='{self.dosage} {self.dosage_unit}')>"
-
-
-class SupplementLog(Base):
-    """
-    Daily tracking of supplement intake.
-
-    One record per supplement per day to track adherence.
-    """
-
-    __tablename__ = "supplement_logs"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, default=1
-    )
-    supplement_id = Column(
-        Integer, ForeignKey("supplements.id", ondelete="CASCADE"), nullable=False
-    )
-
-    # Tracking
-    date = Column(Date, nullable=False)
-    taken = Column(Boolean, default=True, nullable=False)
-    taken_at = Column(Time)  # Optional: specific time
-    dose_count = Column(Integer, default=1, nullable=False)  # Number of doses
-    notes = Column(TEXT)
-
-    # Timestamp
-    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
-
-    # Relationships
-    user = relationship("User", back_populates="supplement_logs")
-    supplement = relationship("Supplement", back_populates="logs")
-
-    # Constraints
-    __table_args__ = (
-        UniqueConstraint("user_id", "supplement_id", "date", name="uq_supplement_log"),
-        Index("idx_supplement_logs_date", "date"),
-        Index("idx_supplement_logs_user_date", "user_id", "date"),
-    )
-
-    def __repr__(self) -> str:
-        status = "✓" if self.taken else "✗"
-        return f"<SupplementLog(supplement_id={self.supplement_id}, date={self.date}, taken={status})>"

@@ -157,19 +157,5 @@ class HealthAPIClient:
         return self._get("/api/v1/supplements", params={"active_only": active_only})
 
     def get_supplement_stack(self) -> Any:
-        """Get supplement stack with today's status."""
+        """Get supplement stack grouped by timing."""
         return self._get("/api/v1/supplements/stack")
-
-    def get_supplement_status_today(self) -> Any:
-        """Get today's supplement status."""
-        return self._get("/api/v1/supplements/status/today")
-
-    def get_supplement_status(self, target_date: date) -> Any:
-        """Get supplement status for a specific date."""
-        return self._get(f"/api/v1/supplements/status/{target_date.isoformat()}")
-
-    def get_supplement_adherence(self, weeks_ago: int = 0) -> Any:
-        """Get weekly supplement adherence."""
-        return self._get(
-            "/api/v1/supplements/adherence/week", params={"weeks_ago": weeks_ago}
-        )
