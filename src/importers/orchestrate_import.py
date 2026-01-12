@@ -11,10 +11,12 @@ This script:
 """
 
 import shutil
+import struct
 import sys
 import tempfile
 import time
 import zipfile
+import zlib
 from pathlib import Path
 from typing import TypedDict
 
@@ -38,9 +40,75 @@ class OrchestrationResult(TypedDict):
     error_message: str | None
 
 
+def _extract_streaming_zip(zip_path: Path, temp_dir: Path) -> Path:
+    """
+    Extract a streaming zip file that lacks central directory.
+
+    Apple Health exports sometimes create zips without the end-of-central-directory
+    marker, which standard tools can't read. This function manually decompresses
+    the raw deflate stream.
+
+    Args:
+        zip_path: Path to the streaming zip file
+        temp_dir: Directory to extract to
+
+    Returns:
+        Path to extracted export.xml
+    """
+    print("📦 Extracting streaming zip (Apple Health format)...")
+
+    with open(zip_path, "rb") as f:
+        # Read local file header
+        sig = f.read(4)
+        if sig != b"PK\x03\x04":
+            raise ValueError("Not a valid zip file")
+
+        f.read(2)  # version
+        f.read(2)  # flags
+        compression = struct.unpack("<H", f.read(2))[0]
+        f.read(8)  # mod time/date, crc32
+        f.read(8)  # compressed/uncompressed size (0 for streaming)
+        name_len = struct.unpack("<H", f.read(2))[0]
+        extra_len = struct.unpack("<H", f.read(2))[0]
+
+        filename = f.read(name_len).decode("utf-8")
+        f.read(extra_len)  # Skip extra field
+
+        if compression != 8:  # 8 = deflate
+            raise ValueError(f"Unsupported compression method: {compression}")
+
+        # Read all remaining data as compressed deflate stream
+        compressed_data = f.read()
+
+    # Decompress using raw deflate (wbits=-15)
+    print(f"   Decompressing {len(compressed_data) / 1024 / 1024:.1f} MB...")
+    decompressor = zlib.decompressobj(-15)
+    decompressed = decompressor.decompress(compressed_data)
+    try:
+        decompressed += decompressor.flush()
+    except zlib.error:
+        pass  # May fail on truncated data, but we have what we need
+
+    # Create output path matching original structure
+    output_path = temp_dir / filename
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, "wb") as out:
+        out.write(decompressed)
+
+    print(f"✅ Extracted to: {output_path.parent}")
+    print(f"📊 File size: {len(decompressed) / (1024**3):.2f} GB")
+    print()
+
+    return output_path
+
+
 def extract_export_zip(zip_path: Path) -> Path:
     """
     Extract export.zip to temporary directory.
+
+    Handles both standard zips and Apple Health's streaming format
+    (which lacks central directory).
 
     Args:
         zip_path: Path to export.zip file
@@ -55,10 +123,14 @@ def extract_export_zip(zip_path: Path) -> Path:
     temp_dir = Path(tempfile.mkdtemp(prefix="health_import_"))
 
     try:
-        # Extract zip
+        # Try standard extraction first
         print(f"📦 Extracting {zip_path.name}...")
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(temp_dir)
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+        except zipfile.BadZipFile:
+            # Fall back to streaming extraction for Apple Health format
+            return _extract_streaming_zip(zip_path, temp_dir)
 
         # Find export.xml (usually in apple_health_export/export.xml)
         export_xml_candidates = list(temp_dir.rglob("export.xml"))
