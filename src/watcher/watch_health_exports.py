@@ -14,6 +14,7 @@ import logging
 import shutil
 import sys
 import tempfile
+import threading
 import time
 import zipfile
 from logging.handlers import RotatingFileHandler
@@ -62,6 +63,8 @@ class HealthExportHandler(FileSystemEventHandler):
         self.last_modified: dict[Path, float] = {}  # Track file modification times
         self.debounce_seconds = 5  # Wait 5s after last modification
         self.import_in_progress = False  # Prevent concurrent imports
+        self.pending_import: set[Path] = set()  # Track pending imports
+        self._lock = threading.Lock()  # Synchronize access to shared state
 
     def _is_apple_health_export(self, filename: str) -> bool:
         """Check if file is an Apple Health export."""
@@ -102,21 +105,42 @@ class HealthExportHandler(FileSystemEventHandler):
         Schedule import after debounce period.
 
         Waits for file to be stable (no modifications for 5 seconds)
-        before triggering import.
+        before triggering import. Uses locking to prevent race conditions
+        from multiple watchdog events.
         """
-        self.last_modified[file_path] = time.time()
+        with self._lock:
+            # If import already pending for this file, just update timestamp
+            if file_path in self.pending_import:
+                self.last_modified[file_path] = time.time()
+                return
 
-        # Wait for file to stabilize
+            # Mark as pending to prevent duplicate scheduling
+            self.pending_import.add(file_path)
+            self.last_modified[file_path] = time.time()
+
+        # Wait for file to stabilize (outside lock to not block other events)
         time.sleep(self.debounce_seconds)
 
-        # Check if file was modified again during wait
-        if file_path in self.last_modified:
+        with self._lock:
+            # Check if file was modified again during wait
+            if file_path not in self.last_modified:
+                self.pending_import.discard(file_path)
+                return
+
             time_since_last_mod = time.time() - self.last_modified[file_path]
 
             if time_since_last_mod >= self.debounce_seconds:
                 # File is stable, trigger import
                 del self.last_modified[file_path]
-                self._trigger_import(file_path)
+                self.pending_import.discard(file_path)
+                should_import = True
+            else:
+                # File was modified during wait, let the later event handle it
+                self.pending_import.discard(file_path)
+                should_import = False
+
+        if should_import:
+            self._trigger_import(file_path)
 
     def _trigger_import(self, zip_path: Path):
         """
@@ -124,16 +148,19 @@ class HealthExportHandler(FileSystemEventHandler):
 
         Routes to Apple Health orchestrator or MyFitnessPal importer.
         """
-        if self.import_in_progress:
-            logger.warning("Import already in progress, skipping")
-            send_notification(
-                title="Health Import Skipped",
-                message="Another import is already running",
-                sound="Tink",
-            )
-            return
+        # Use lock to prevent race condition where two threads both see
+        # import_in_progress=False and both start imports
+        with self._lock:
+            if self.import_in_progress:
+                logger.warning("Import already in progress, skipping")
+                send_notification(
+                    title="Health Import Skipped",
+                    message="Another import is already running",
+                    sound="Tink",
+                )
+                return
 
-        self.import_in_progress = True
+            self.import_in_progress = True
 
         try:
             logger.info(f"Starting import for: {zip_path}")
@@ -154,7 +181,8 @@ class HealthExportHandler(FileSystemEventHandler):
             )
 
         finally:
-            self.import_in_progress = False
+            with self._lock:
+                self.import_in_progress = False
 
     def _import_apple_health(self, zip_path: Path):
         """Import Apple Health export.zip using orchestrator."""
